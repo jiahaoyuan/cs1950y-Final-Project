@@ -95,7 +95,7 @@ transition[State] follower_vote_for_cand {
 				n.State = Follower
     */
         #this.candidate > 0 implies {
-            one c: cands | one n: follower {
+            one c: cands | one n: follower { -- do we fix the other nodes?
                 c.Term < n.Term implies{ -- candidate fall back
                     c.Term' = n.Term
                     c.voteTo' = {}

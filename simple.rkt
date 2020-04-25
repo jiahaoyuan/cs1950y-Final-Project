@@ -7,7 +7,7 @@ sig Candidate extends Status{}
 sig Leader extends Status{}
 
 sig Node{
-    trm: one Int,
+    trm: one Int, --5 -> 1
     voteTo: lone Node
 }
 
@@ -60,7 +60,7 @@ transition[State] election {
             -- is always greater. It is true based on your condition in "advance",
             -- but not true in the real world.
             old in followers and no old.voteTo implies {
-                some c: candidates | new.voteTo = c
+                one c: candidates | new.voteTo = c
                 followers' = followers + new - old
                 candidates' = candidates
                 leaders' = leaders
@@ -96,6 +96,7 @@ transition[State] election {
     step' = sing[add[sum[step], 1]]
 }
 
+--transition[State] become_leader {} --TODO: #voteTo.self = count of how many vote for me.
 
 -- Jiahao's Comment: This is a very good simplification! Well done!
 -- But, I think we might also missed a lot of details here.

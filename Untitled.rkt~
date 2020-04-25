@@ -1,0 +1,9 @@
+#lang forge
+
+sig node {
+    num: Int
+}
+
+sig State{}
+
+run {} for 1 node, 3 State
