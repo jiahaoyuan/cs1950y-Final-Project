@@ -1,0 +1,15 @@
+#lang forge
+
+sig Mesh {
+    triangles: set Triangle,
+    adj: set Triangle -> Triangle
+}
+
+sig Triangle {
+    edges: set Vertex -> Vertex
+}
+
+sig Vertex {}
+
+--------------------
+fun dom [r: univ->univ]: set (r.univ) {r.univ}

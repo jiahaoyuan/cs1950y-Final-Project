@@ -56,12 +56,16 @@ transition[State] election {
     some old: network {
         some new: Node-network | {
             new.trm = old.trm
+            -- Jiahao's Comment: here you are assuming that the candidate's term
+            -- is always greater. It is true based on your condition in "advance",
+            -- but not true in the real world.
             old in followers and no old.voteTo implies {
                 some c: candidates | new.voteTo = c
                 followers' = followers + new - old
                 candidates' = candidates
                 leaders' = leaders
             }
+            
             old in candidates implies {
                 some c: candidates | sum[c.trm] > sum[old.trm] implies {
                     candidates' = candidates - old
@@ -72,6 +76,10 @@ transition[State] election {
                 }
                 leaders' = leaders
             }
+            -- jiahao's comment: how is the leader elected? Here it is saying
+            -- if candidates' term > leaders' term, then leader fall back.
+            -- but how is a new leader selected? I did not see where a candidate
+            -- becomes a leader? I don't see how it is possible without a majority count.
             old in leaders implies {
                 some c: candidates | sum[c.trm] > sum[old.trm] implies {
                     leaders' = leaders - old
@@ -88,7 +96,20 @@ transition[State] election {
     step' = sing[add[sum[step], 1]]
 }
 
--- we have to randomly choose one of the four transitions available
+
+-- Jiahao's Comment: This is a very good simplification! Well done!
+-- But, I think we might also missed a lot of details here.
+-- This oversimplifies the real world, which is that election
+-- and timout are not mutually exclusive. Even if there is candidates,
+-- there would still be other candidates timeout due to network latency
+-- or network break down. In fact, a node could keep timeout if
+-- it temperarily lose network. That is why we might get different
+-- terms in each nodes, and the node with the largest term wins.
+-- However, since you appart election and timeout, it means that in every
+-- election, all the candidates will have the same term. This is not
+-- only unrealistic, but also will result in a long time of tie.
+-- Raft should be very fault-tolerant, one of which is network partition.
+-- It would be the best if we show that our model can deal with this problem.
 transition[State] advance {
     #candidates > 0 implies {
         election[this, this']
