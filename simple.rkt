@@ -11,6 +11,10 @@ sig Node{
     voteTo: lone Node
 }
 
+sig Majority {
+    constant: one Int
+}
+
 -- a State should represent this network at certain time
 sig State {
     network: set Node, 
@@ -30,6 +34,7 @@ pred stateInvariant[nodeCount: Int] {
 
 state[State] initState {
     all n: network | n.trm = sing[0] and (no n.voteTo)
+    sum[constant] = 3 -- if #network = 5
     step = sing[0] 
     no leaders
     no candidates
@@ -66,16 +71,39 @@ transition[State] election {
                 leaders' = leaders
             }
             
-            old in candidates implies {
-                some c: candidates | sum[c.trm] > sum[old.trm] implies {
+            old in candidates implies and #leader > 0 implies{
+                -- candidate found leader
+                one l: leader | sum[old.trm] > sum[l.trm] implies { -- leader falls back
+                    l.voteTo = old
+                    followers' = followers + l 
+                    leaders' = leaders - l
+                } else { -- candidate falls back 
+                    -- todo: 
+                    no old.voteTo
+                    follwers' = followers + old
+                    candidates' = candidates - old
+                }
+            }
+            
+            old in candidates implies { 
+                -- candidate can also fall back
+                -- 2) candidate's term < follower's term
+                one c: candidates | sum[c.trm] > sum[old.trm] implies {
                     candidates' = candidates - old
                     followers' = followers + new 
                 } else {
-                    candidates' = candidates - old + new
-                    followers' = followers
+                    sum[c.trm] < sum[old.trm] implies {
+                        no c.voteTo
+                        followers' = followers + c
+                        candidates' = candidates - c
+                    } else {
+                        candidates' = candidates - old + new
+                        followers' = followers
+                    }
                 }
                 leaders' = leaders
             }
+            
             -- jiahao's comment: how is the leader elected? Here it is saying
             -- if candidates' term > leaders' term, then leader fall back.
             -- but how is a new leader selected? I did not see where a candidate
@@ -89,6 +117,14 @@ transition[State] election {
                     followers' = followers
                 }
                 candidates' = candidates
+            }
+            
+            -- leader election
+            old in candidates implies {
+                #voteTo.old > #majority implies {
+                    candidates' =  candidate - old
+                    leaders' = leader + old
+                }
             }
             network' = network - old + new
         }
