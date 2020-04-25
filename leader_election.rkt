@@ -78,7 +78,7 @@ transition[State] clock_count_down {
     leader' = this.leader
 }
 
--- selecting one candidate, ask every other nodes to see if they agree
+-- selecting one candidate, and one follower to vote
 -- currently the candidate does not fall back. It could be in real world though
 transition[State] follower_vote_for_cand {
     -- TODO:
@@ -94,9 +94,8 @@ transition[State] follower_vote_for_cand {
 				n.Clock reset
 				n.State = Follower
     */
-    let cands = candidate | all n: follower | {
         #this.candidate > 0 implies {
-            one c: cands {
+            one c: cands | one n: follower {
                 c.Term < n.Term implies{ -- candidate fall back
                     c.Term' = n.Term
                     c.voteTo' = {}
@@ -174,6 +173,9 @@ transition[State] cand_vote_for_cand {
     */
 }
 
+transition[State] leader_vote_for_cand {
+}
+
 -- one candidate check to see if it can become a leader
 transition[State] become_leader {
     -- TODO:
@@ -189,7 +191,7 @@ transition[State] become_leader {
 
 -- the leader's heartbeat should count down, only if
 -- there exist a leader
-transition[State] heartbeat_countdown{
+transition[State] heartbeat{
     -- TODO:
     /**
 heatbeat --
@@ -202,10 +204,33 @@ for n in nodes:
 
 -- we have to randomly choose one of the four transitions available
 transition[State] advance {
-    clock_count_down[this, this'] or
-    vote_request[this, this'] or
-    become_leader[this, this'] or
-    heartbeat_countdown[this, this'] 
+    #candidate = 0 and #leader = 0 implies {
+        clock_count_down[this, this']
+    }
+    #candidate = 0 and #leader > 0 implies {
+        clock_count_down[this, this'] or
+        heartbeat[this, this']
+    }
+    #candidate = 1 and #leader = 0 implies {
+        clock_count_down[this, this'] or
+        follower_vote_for_cand[this, this'] 
+    }
+    #candidate = 1 and #leader = 1 implies {
+        clock_count_down[this, this'] or
+        follower_vote_for_cand[this, this'] 
+    }
+    #candidate > 1 and #leader = 0 implies {
+        clock_count_down[this, this'] or
+        follower_vote_for_cand[this, this'] or
+        cand_vote_for_cand[this, this']
+    }
+    #candidate > 1 and #leader > 0 implies {
+        clock_count_down[this, this'] or
+        follower_vote_for_cand[this, this'] or
+        cand_vote_for_cand[this, this'] or
+        leader_vote_for_cand[this, this'] or
+        heartbeat[this, this']
+    }
 }
 
 
