@@ -136,7 +136,7 @@ transition[State] cand_comm_leader {
 -- one may vote for the other
 transition[State] cand_comm_cand {
     -- TODO: jiayang
-    one cand1: candidates |one cand2: candidates - cand1 {
+    some cand1: candidates |some cand2: candidates - cand1 {
         sum[trm[cand1]] >= sum[trm[cand2]] implies {
           -- 1. if cand1 has a higher term, cand2 will fall back to follower and should vote to cand1
           candidates' = candidates - cand2
@@ -161,7 +161,7 @@ transition[State] cand_comm_cand {
 
 transition[State] become_leader {
     -- TODO: jiahao
-    all cand: candidates|
+     cand: candidates|
         -- 1. if one candidate gets the majority of votes, it wins and will become the leader
         #(cand.voteTo) > sum[Majority.constant] implies {
             candidates' = candidates - cand
