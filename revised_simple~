@@ -159,27 +159,19 @@ transition[State] cand_comm_leader {
 transition[State] cand_comm_cand {
     -- TODO: jiayang
     some cand1: candidates |some cand2: candidates - cand1 {
-        sum[trm[cand1]] > sum[trm[cand2]] implies {
+        sum[trm[cand1]] >= sum[trm[cand2]] implies {
           -- 1. if cand1 has a higher term, cand2 will fall back to follower and should vote to cand1
           candidates' = candidates - cand2
           followers' = followers + cand2
           voteTo' = voteTo + cand2->cand1
           trm' = trm - cand2->trm[cand2] + cand2->trm[cand1]
         }
-        
-        sum[trm[cand1]] < sum[trm[cand2]] implies {
+        else{
           -- 2. if cand2 has a higher term, cand1 will fall back to follower and should vote to cand1
           candidates' = candidates - cand1
           followers' = followers + cand1
           voteTo' = voteTo + cand1->cand2
           trm' = trm - cand1->trm[cand1] + cand1->trm[cand2]
-      
-        }
-        sum[trm[cand1]] = sum[trm[cand2]] implies {
-            candidates' = candidates
-            followers' = followers
-            voteTo' = voteTo
-            trm' = trm
         }
     }
     leaders' = leaders
@@ -193,17 +185,11 @@ transition[State] become_leader {
     -- TODO: jiahao
      some cand: candidates|
         -- 1. if one candidate gets the majority of votes, it wins and will become the leader
-        #(voteTo.cand) > sum[Majority.constant] implies {
+        #(cand.voteTo) > sum[Majority.constant] implies {
             candidates' = candidates - cand
             leaders' = leaders + cand
             followers' = followers
             voteTo' = voteTo - voteTo -- all votes should be invalid
-            trm' = trm
-        } else {
-            candidates' = candidates
-            leaders' = leaders 
-            followers' = followers
-            voteTo' = voteTo
             trm' = trm
         }
     network' = network
@@ -236,9 +222,7 @@ transition[State] advance {
     }
     */
     --fol_comm_cand[this, this']
-    -- cand_comm_leader[this, this']
-    cand_comm_cand[this, this']
-    become_leader[this, this']
+    cand_comm_leader[this, this']
 }
 ------------------------------Run----------------------
 state[State] testState {
@@ -255,7 +239,7 @@ state[State] testState {
 state[State] testState2 {
     no voteTo
     step = sing[0]
-    #leaders = 1
+
     all n: followers | n->sing[0] in trm
     one n: candidates | n->sing[0] in trm
     one n: leaders | n->sing[0] in trm
@@ -263,27 +247,16 @@ state[State] testState2 {
     Majority.constant = sing[2] -- if #network = 3
 }
 
-state[State] testState3 {
-    all n: candidates | n->n in voteTo
-    step = sing[0]
-    no leaders
-    no followers
-    one n: candidates | n->sing[1] in trm
-    one n: candidates | n->sing[2] in trm
-    one n: candidates | n->sing[3] in trm
-    Majority.constant = sing[2] -- if #network = 3
-}
-
 --trace<|State, initState, advance, _|> election {}
 --trace<|State, testState, advance, _|> election {}
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- The testcase created by Jiayang
-trace<|State, testState3, advance, _|> election {}
+trace<|State, testState2, advance, _|> election {}
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 inst bounds {
     #Node = 3
-    #State = 5
+    #State = 3
 }
 
 pred wellFormed {
