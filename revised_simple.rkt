@@ -72,7 +72,7 @@ transition[State] timeout {
 -- candidate could also fall back if its term is smaller
 transition[State] fol_comm_cand{
     some fol: followers | some cand: candidates {
-    -- ***********************************************
+    -- ************************************************
     -- Jiahao's comment: WARNING! If you say one fol or one cand, it is unsat!
     -- one means one and only one satisfy the following.
     -- Use some! It will pick any individuals or a combination of individuals.
