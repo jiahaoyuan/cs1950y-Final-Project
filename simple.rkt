@@ -7,7 +7,7 @@ sig Candidate extends Status{}
 sig Leader extends Status{}
 
 sig Node{
-    trm: one Int, --5 -> 1
+    trm: one Int, 
     voteTo: lone Node
 }
 
@@ -34,7 +34,7 @@ pred stateInvariant[nodeCount: Int] {
 
 state[State] initState {
     all n: network | n.trm = sing[0] and (no n.voteTo)
-    sum[constant] = 3 -- if #network = 5
+    Majority.constant = sing[3] -- if #network = 5
     step = sing[0] 
     no leaders
     no candidates
@@ -57,6 +57,70 @@ transition[State] timeout {
     leaders' = leaders
 }
 
+-- Randomly choosing a follower and a candidate
+-- the follower may or may not vote for this candidate
+transition[State] fol_comm_cand { -- check
+    one old: followers | one c: candidates | one new: Node-network {
+        new.trm = old.trm
+        c.trm > old.trm and no old.voteTo implies {
+            new.voteTo = c
+            followers' = followers + new - old
+            candidates' = candidates
+            leaders' = leaders
+        }
+}
+
+-- Randomly choosing a candidate and a leader
+-- either the leader will vote for the candidate and fall back
+-- or the candidate will fall back to follower
+transition[State] cand_comm_leader {
+    one old: candidates | one l: leader |  one new: Node-network {   
+        new.trm = old.trm
+        | sum[old.trm] > sum[l.trm] implies {
+            -- leader falls back
+            l.voteTo = old -- can you?
+            followers' = followers + l 
+            leaders' = leaders - l
+        } else {
+            -- candidate falls back 
+            no old.voteTo
+            follwers' = followers + old
+            candidates' = candidates - old
+        }
+    }
+}
+
+-- Randomly choosing two candidate
+-- one may vote for the other
+transition[State] cand_comm_cand {
+    one old: candidates {
+        one new: Node-network | {
+        new.trm = old.trm 
+        -- candidate can also fall back
+        -- 2) candidate's term < follower's term
+        one c: candidates - old | sum[c.trm] > sum[old.trm] implies {
+            candidates' = candidates - old
+            followers' = followers + new 
+        } else {
+            sum[c.trm] < sum[old.trm] implies {
+                no c.voteTo
+                followers' = followers + c
+                candidates' = candidates - c
+            } else {
+                candidates' = candidates - old + new
+                followers' = followers
+            }
+        }
+        leaders' = leaders
+    }
+}
+
+transition[State] cand_to_cand {
+    some old: network {
+        some new: Node-network | {
+            new.trm = old.trm
+}
+
 transition[State] election {
     some old: network {
         some new: Node-network | {
@@ -64,52 +128,19 @@ transition[State] election {
             -- Jiahao's Comment: here you are assuming that the candidate's term
             -- is always greater. It is true based on your condition in "advance",
             -- but not true in the real world.
-            old in followers and no old.voteTo implies {
-                one c: candidates | new.voteTo = c
-                followers' = followers + new - old
-                candidates' = candidates
-                leaders' = leaders
-            }
             
-            old in candidates implies and #leader > 0 implies{
-                -- candidate found leader
-                one l: leader | sum[old.trm] > sum[l.trm] implies { -- leader falls back
-                    l.voteTo = old
-                    followers' = followers + l 
-                    leaders' = leaders - l
-                } else { -- candidate falls back 
-                    -- todo: 
-                    no old.voteTo
-                    follwers' = followers + old
-                    candidates' = candidates - old
-                }
-            }
             
-            old in candidates implies { 
-                -- candidate can also fall back
-                -- 2) candidate's term < follower's term
-                one c: candidates | sum[c.trm] > sum[old.trm] implies {
-                    candidates' = candidates - old
-                    followers' = followers + new 
-                } else {
-                    sum[c.trm] < sum[old.trm] implies {
-                        no c.voteTo
-                        followers' = followers + c
-                        candidates' = candidates - c
-                    } else {
-                        candidates' = candidates - old + new
-                        followers' = followers
-                    }
-                }
-                leaders' = leaders
-            }
+            
+            
+            
+            
             
             -- jiahao's comment: how is the leader elected? Here it is saying
             -- if candidates' term > leaders' term, then leader fall back.
             -- but how is a new leader selected? I did not see where a candidate
             -- becomes a leader? I don't see how it is possible without a majority count.
             old in leaders implies {
-                some c: candidates | sum[c.trm] > sum[old.trm] implies {
+                one c: candidates | sum[c.trm] > sum[old.trm] implies {
                     leaders' = leaders - old
                     followers' = followers + new 
                 } else {
