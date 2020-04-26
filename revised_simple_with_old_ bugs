@@ -71,7 +71,7 @@ transition[State] timeout {
 -- the follower should decide if it wanna to vote
 -- candidate could also fall back if its term is smaller
 transition[State] fol_comm_cand{
-    one fol: followers | one cand: candidates { 
+    some fol: followers | some cand: candidates { 
         sum[trm[cand]] < sum[trm[fol]]  implies {
             -- update candidate's term to follower's term
             trm' = trm - cand->trm[cand] + cand->trm[fol]
@@ -105,7 +105,7 @@ transition[State] fol_comm_cand{
 -- or the candidate will fall back to follower
 transition[State] cand_comm_leader {
     -- TODO: jiayang
-    one cand: candidates | one lead: leaders { -- b
+    some cand: candidates | some lead: leaders { -- b
          -- 1. if there's a leader
             -- 1.1 and the leader's trm is higher, the candidate should fall back to follower
             sum[trm[cand]] <= sum[trm[lead]] implies { -- a
@@ -209,7 +209,7 @@ state[State] testState {
     step = sing[0] 
     no leaders
     #candidates = 1
-    --one n: candidates | n->sing[1] in trm
+    one n: candidates | n->sing[0] in trm
     followers = network - candidates
     Majority.constant = sing[2] -- if #network = 3
 }
