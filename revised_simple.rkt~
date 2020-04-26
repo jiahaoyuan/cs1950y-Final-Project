@@ -37,12 +37,13 @@ fun dom [r: univ->univ] : set (r.univ) { r.univ }
 
 state[State] initState {
     all n: network | n->sing[0] in trm
+    #trm = 3
     no voteTo
     step = sing[0] 
     no leaders
     no candidates
     followers = network
-    Majority.constant = sing[2] -- if #network = 3
+    Majority.constant = sing[3] -- if #network = 5
 }
 
 ------------------------------Transition--------------------------
@@ -84,22 +85,15 @@ transition[State] advance {
 
 trace<|State, initState, advance, _|> election {}
 
-inst bounds {
-    #Node = 3
-    #State = 3
-}
-
 pred wellFormed {
     stateInvariant[3]
     Status = Follower + Candidate + Leader
-    all n: Node | all s: State | {
-        n in s.network
-        #n.(s.trm) = 1
-        #n.(s.voteTo) < 2 
-    }
+    all n: Node | all s: State | n in s.network
+    #trm = 3
+    all n: Node | #voteTo[n] < 2 
 }
 
-run <|election|> {wellFormed} for bounds
+run <|election|> {wellFormed} for exactly 3 Node, 3 State
                                           
 
 
