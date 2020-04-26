@@ -101,6 +101,27 @@ transition[State] fol_comm_cand{
     }   
 }
 
+-- Randomly choosing a candidate and a leader
+-- either the leader will vote for the candidate and fall back
+-- or the candidate will fall back to follower
+-- transition[State] cand_comm_leader {
+    -- TODO: jiayang
+-- }
+
+
+-- Randomly choosing two candidate
+-- one may vote for the other
+-- transition[State] cand_comm_cand {
+    -- TODO: jiayang
+-- }
+
+
+
+-- transition[State] become_leader {
+    -- TODO: jiahao
+}
+
+
 /**
 transition[State] stay_same {
     network' = network
