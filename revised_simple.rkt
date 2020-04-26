@@ -7,7 +7,7 @@ sig Candidate extends Status{}
 sig Leader extends Status{}
 
 sig Node {
-    id: one Int
+    --id: one Int
 }
 
 sig Majority {
@@ -97,7 +97,6 @@ transition[State] fol_comm_cand{
         network' = network
         step' = sing[add[sum[step], 1]]
         leaders' = leaders
-        -- if trm[cand] == trm[fol], do nothing
     }   
 }
 
@@ -119,7 +118,7 @@ transition[State] fol_comm_cand{
 
 -- transition[State] become_leader {
     -- TODO: jiahao
-}
+--}
 
 
 /**
@@ -134,6 +133,7 @@ transition[State] stay_same {
 }*/
 
 transition[State] advance {
+    /**
     #candidates > 0 and #followers = 0 implies {
         timeout[this, this']
     }
@@ -144,13 +144,28 @@ transition[State] advance {
         fol_comm_cand[this, this']
         timeout[this, this']
     }
+    */
+    fol_comm_cand[this, this']
 }
 ------------------------------Run----------------------
+state[State] testState {
+    all n: followers | n->sing[0] in trm
+    no voteTo
+    step = sing[0] 
+    no leaders
+    #candidates = 1
+    one n: candidates | n->sing[0] in trm
+    followers = network - candidates
+    Majority.constant = sing[2] -- if #network = 3
+}
 
-trace<|State, initState, advance, _|> election {}
+
+
+--trace<|State, initState, advance, _|> election {}
+trace<|State, testState, advance, _|> election {}
 
 inst bounds {
-    #Node = 5
+    #Node = 3
     #State = 3
 }
 
@@ -163,6 +178,7 @@ pred wellFormed {
         #n.(s.voteTo) < 2 
     }
 }
+
 
 run <|election|> {wellFormed} for bounds
                                           
