@@ -85,7 +85,7 @@ transition[State] fol_comm_cand{
             -- rest stay the same
             voteTo' = voteTo
         } else {
-            sum[trm[cand]] > sum[trm[fol]] and no voteTo[fol] implies {
+            sum[trm[cand]] > sum[trm[fol]] or (sum[trm[cand] = sum[trm[fol] and no voteTo[fol]]])implies { -- Note: there does not exist a sce
                 voteTo' = voteTo + fol->cand
                 trm' = trm - fol->trm[fol] + fol->trm[cand]
                 -- rest stay the same
