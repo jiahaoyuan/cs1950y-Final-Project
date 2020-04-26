@@ -71,7 +71,13 @@ transition[State] timeout {
 -- the follower should decide if it wanna to vote
 -- candidate could also fall back if its term is smaller
 transition[State] fol_comm_cand{
-    one fol: followers | one cand: candidates { 
+    some fol: followers | some cand: candidates {
+    -- ***********************************************
+    -- Jiahao's comment: WARNING! If you say one fol or one cand, it is unsat!
+    -- one means one and only one satisfy the following.
+    -- Use some! It will pick any individuals or a combination of individuals.
+    --fol = Node1 or Node2 run 1
+    -- ***********************************************
         sum[trm[cand]] < sum[trm[fol]]  implies {
             -- update candidate's term to follower's term
             trm' = trm - cand->trm[cand] + cand->trm[fol]
@@ -81,7 +87,7 @@ transition[State] fol_comm_cand{
             -- rest stay the same
             voteTo' = voteTo
         } else {
-            sum[trm[cand]] > sum[trm[fol]] and no voteTo[fol] implies {
+            sum[trm[cand]] > sum[trm[fol]] and no voteTo[fol] implies { -- now testcase here
                 voteTo' = voteTo + fol->cand
                 trm' = trm - fol->trm[fol] + fol->trm[cand]
                 -- rest stay the same
@@ -94,10 +100,11 @@ transition[State] fol_comm_cand{
                     trm' = trm
                 }
         }
-        network' = network
-        step' = sing[add[sum[step], 1]]
-        leaders' = leaders
-    }   
+        
+    }
+    network' = network
+    step' = sing[add[sum[step], 1]]
+    leaders' = leaders
 }
 
 -- Randomly choosing a candidate and a leader
@@ -148,14 +155,14 @@ transition[State] advance {
     fol_comm_cand[this, this']
 }
 ------------------------------Run----------------------
-state[State] testState {
+state[State] testState { -- 1 cand, t=0, -- rest fol, t=0
     all n: followers | n->sing[0] in trm
-    no voteTo
-    step = sing[0] 
-    no leaders
     #candidates = 1
     one n: candidates | n->sing[0] in trm
     followers = network - candidates
+    no leaders
+    no voteTo
+    step = sing[0] 
     Majority.constant = sing[2] -- if #network = 3
 }
 
