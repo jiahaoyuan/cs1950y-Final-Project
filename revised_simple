@@ -195,6 +195,42 @@ transition[State] become_leader {
     step' = sing[add[sum[step], 1]]        
 }
 
+-- To simulate leader sending heatbeat to other members
+-- if the leader's term is greater or equal:
+-- reset all the attr of this member to wanted
+-- otherwise, leader fallback 
+transition[State] heartbeat {
+    some n : leaders | some m: network-n | {--could be more than one leader, each at different term
+        sum[trm[n]] > sum[trm[m]] or sum[trm[n]] = sum[trm[m]] implies {
+            -- reset the member's attribute term, status
+            trm' = trm - m->trm[m] + m->trm[n]
+            m in candidates implies {
+                candidates' = candidates - m
+                followers' = followers + m
+                leaders' = leaders
+            }
+            m in leaders implies {
+                leaders' = leaders - m
+                followers' = followers + m
+                candidates' = candidates
+            }
+            m in followers implies {
+                leaders' = leaders
+                followers' = followers
+                candidates' = candidates
+            } 
+        } else { -- leader's term is smaller, reset leader
+        trm' = trm - n->trm[n] + n->trm[m]
+        leaders' = leaders - n
+        followers' = followers + n
+        candidates' = candidates
+    }
+}
+         network' = network
+         step' = sing[add[sum[step], 1]]
+         voteTo' = voteTo
+}
+
 
 /**
 transition[State] stay_same {
@@ -223,7 +259,8 @@ transition[State] advance {
     --fol_comm_cand[this, this']
     -- cand_comm_leader[this, this']
     -- cand_comm_cand[this, this']
-    become_leader[this, this']
+    #candidates > 0 implies{become_leader[this, this']}
+    #leaders > 0 implies{heartbeat[this, this']}
 }
 ------------------------------Run----------------------
 state[State] testState {
@@ -261,10 +298,14 @@ state[State] testState3 {
     one candidates
     
     one n: candidates {
-        n->sing[1] in trm
+        n->sing[2] in trm
         one n2: followers {
             n2->n in voteTo
-            one n3: followers - n2| no n3.voteTo
+            n2->sing[2] in trm
+            one n3: followers - n2| {
+                no n3.voteTo
+                n3->sing[1] in trm
+            }
         }
     }
     
@@ -280,7 +321,7 @@ trace<|State, testState3, advance, _|> election {}
 
 inst bounds {
     #Node = 3
-    #State = 5
+    #State = 4
 }
 
 pred wellFormed {
