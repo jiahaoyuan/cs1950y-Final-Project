@@ -29,9 +29,9 @@ sig State {
 pred stateInvariant[nodeCount: Int] {
     all s: State | #s.network = nodeCount and
                    s.network = s.leaders + s.followers + s.candidates and
-                   no s.leaders & s.followers and
-                   no s.candidates & s.followers and
-                   no s.leaders & s.candidates
+                   --no s.leaders & s.followers and
+                   no s.candidates & s.followers
+                   --no s.leaders & s.candidates
                    
 }
 
@@ -110,47 +110,31 @@ transition[State] fol_comm_cand{
 transition[State] cand_comm_leader {
     -- TODO: jiayang
     
-    some cand: candidates | some lead: leaders { -- b
+    some cand: candidates | some lead: leaders {
          -- 1. if there's a leader
             -- 1.1 and the leader's trm is higher, the candidate should fall back to follower
-            sum[trm[cand]] <= sum[trm[lead]] implies { -- a
+            sum[trm[cand]] <= sum[trm[lead]] implies { 
                 candidates' = candidates - cand
                 followers' = followers + cand
                 leaders' = leaders
                 voteTo' = voteTo
                 trm' = trm - cand->trm[cand] + cand->trm[lead]
-                /*leaders' = leaders
-                followers' = followers
-                candidates' = candidates
-                voteTo' = voteTo*/
-                --trm' = trm
-            } -- a
+            } 
             
             -- 1.2. and the leader's trm is smaller, the leader should fall back to follower and vote the candidate
-            else { -- a
+            else { 
                 candidates' = candidates
                 followers' = followers + lead
                 leaders' = leaders - lead
                 voteTo' = voteTo + lead->cand
                 trm' = trm - lead->trm[lead] + lead->trm[cand]
                
-            } -- a
+            } 
         -- 2. if there's no leader, nothing should happen
         
         network' = network
         step' = sing[add[sum[step], 1]]
-    } -- b
-    
-    /*
-    step' = step
-    network' = network
-    leaders' = leaders
-    followers' = followers
-    candidates' = candidates
-    voteTo' = voteTo
-    trm' = trm
-    */
-
+    } 
 }
 
 
@@ -191,15 +175,16 @@ transition[State] cand_comm_cand {
 
 transition[State] become_leader {
     -- TODO: jiahao
-     some cand: candidates|
+    some cand: candidates|
         -- 1. if one candidate gets the majority of votes, it wins and will become the leader
-        #(voteTo.cand) > sum[Majority.constant] implies {
-            candidates' = candidates - cand
+        -- either a candidate wins or no winner
+        #(voteTo.cand) >= sum[Majority.constant] implies {
+            candidates' =  candidates - cand
             leaders' = leaders + cand
-            followers' = followers
-            voteTo' = voteTo - voteTo -- all votes should be invalid
-            trm' = trm
-        } else {
+            followers' = network - candidates' - leaders'
+            no voteTo'
+            trm' = trm -- need to rewrite this to make sure all nodes in the network have the same trm
+        } else {     
             candidates' = candidates
             leaders' = leaders 
             followers' = followers
@@ -237,7 +222,7 @@ transition[State] advance {
     */
     --fol_comm_cand[this, this']
     -- cand_comm_leader[this, this']
-    cand_comm_cand[this, this']
+    -- cand_comm_cand[this, this']
     become_leader[this, this']
 }
 ------------------------------Run----------------------
@@ -264,13 +249,25 @@ state[State] testState2 {
 }
 
 state[State] testState3 {
+    -- to test become_leader
+    -- two followers and one candidate, the candidate gets at least two votes and will become a leader
+    
     all n: candidates | n->n in voteTo
+    
     step = sing[0]
+    
     no leaders
-    no followers
-    one n: candidates | n->sing[1] in trm
-    one n: candidates | n->sing[2] in trm
-    one n: candidates | n->sing[3] in trm
+
+    one candidates
+    
+    one n: candidates {
+        n->sing[1] in trm
+        one n2: followers {
+            n2->n in voteTo
+            one n3: followers - n2| no n3.voteTo
+        }
+    }
+    
     Majority.constant = sing[2] -- if #network = 3
 }
 
