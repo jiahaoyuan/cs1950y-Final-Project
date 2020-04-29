@@ -207,33 +207,27 @@ transition[State] heartbeat {
         sum[trm[n]] > sum[trm[m]] or sum[trm[n]] = sum[trm[m]] implies {
             -- reset the member's attribute term, status
             trm' = trm - m->trm[m] + m->trm[n]
-            /**
+            
             m in candidates implies {
                 candidates' = candidates - m
                 followers' = followers + m
                 leaders' = leaders
                 trm' = trm - m->trm[m] + m->sing[-8]
             }
-            */
-            /**
+            
             m in leaders implies {
                 leaders' = leaders - m
                 followers' = followers + m
                 candidates' = candidates
                 trm' = trm - m->trm[m] + m->sing[-7]
             }
-            */
-            /**
+        
             m in followers implies {
                 leaders' = leaders
                 followers' = followers
                 candidates' = candidates
                 trm' = trm - m->trm[m] + m->sing[-6]
             }
-            */
-            leaders' = leaders 
-            followers' = followers 
-            candidates' = candidates
         } else {
             -- leader's term is smaller, reset leader
             trm' = trm - n->trm[n] + n->trm[m]
@@ -277,7 +271,7 @@ transition[State] advance {
     -- cand_comm_cand[this, this']
     -- #candidates > 0 implies{become_leader[this, this']} 
     --#leaders > 0 implies{heartbeat[this, this']}
-    heartbeat[this, this'[
+    heartbeat[this, this']
 }
 ------------------------------Run----------------------
 state[State] testState {
@@ -330,7 +324,6 @@ state[State] testState4 {
     step = sing[0]
     #leaders = 1
     no candidates
-    --#candidates = 1
     all n: followers | n->sing[0] in trm
     --one n: candidates | n->sing[1] in trm
     one n: leaders | n->sing[2] in trm
