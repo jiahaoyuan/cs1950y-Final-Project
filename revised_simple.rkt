@@ -28,7 +28,10 @@ sig State {
 -----------------------------Helper Predicates------------------------------------
 pred stateInvariant[nodeCount: Int] {
     all s: State | #s.network = nodeCount and
-                   s.network = s.leaders + s.followers + s.candidates      
+                   s.network = s.leaders + s.followers + s.candidates and
+                   no s.leaders & s.followers and
+                   no s.leaders & s.candidates and
+                   no s.followers & s.candidates -- no status can have more than two status
 }
 
 fun dom [r: univ->univ] : set (r.univ) { r.univ }
@@ -203,8 +206,8 @@ transition[State] become_leader {
 -- reset all the attr of this member to wanted
 -- otherwise, leader fallback 
 transition[State] heartbeat {
-    some n : leaders | some m: network-n | {--could be more than one leader, each at different term
-        sum[trm[n]] > sum[trm[m]] or sum[trm[n]] = sum[trm[m]] implies {
+    some n : leaders | some m: network-n {--could be more than one leader, each at different term
+        sum[trm[n]] >= sum[trm[m]] implies {
             -- reset the member's attribute term, status
             trm' = trm - m->trm[m] + m->trm[n]
             
@@ -212,21 +215,18 @@ transition[State] heartbeat {
                 candidates' = candidates - m
                 followers' = followers + m
                 leaders' = leaders
-                trm' = trm - m->trm[m] + m->sing[-8]
             }
             
             m in leaders implies {
                 leaders' = leaders - m
                 followers' = followers + m
                 candidates' = candidates
-                trm' = trm - m->trm[m] + m->sing[-7]
             }
         
             m in followers implies {
                 leaders' = leaders
                 followers' = followers
                 candidates' = candidates
-                trm' = trm - m->trm[m] + m->sing[-6]
             }
         } else {
             -- leader's term is smaller, reset leader
