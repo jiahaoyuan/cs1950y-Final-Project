@@ -15,7 +15,8 @@ sig Majority {
 }
 
 sig State {
-    network: set Node,
+    network: set Node, -- nodes in the network
+    reserve: set Node, -- nodes not in the network
     step: one Int,
     leaders: set Node,
     followers: set Node,
@@ -27,7 +28,9 @@ sig State {
 
 -----------------------------Helper Predicates------------------------------------
 pred stateInvariant[nodeCount: Int] {
-    all s: State | #s.network = nodeCount and
+    all s: State | 
+                   Node = s.network + s.reserve and -- Nodes must either be in network or reserve
+                   no s.network & s.reserve and
                    s.network = s.leaders + s.followers + s.candidates and
                    no s.leaders & s.followers and
                    no s.leaders & s.candidates and
@@ -51,18 +54,19 @@ state[State] initState {
 -- randomly select a follower or a leader to timeout
 transition[State] timeout { 
     one n : network - leaders | let cur_trm = trm[n] |
-        let next_trm = sing[add[sum[cur_trm], 1]] | {
-            -- term ++
+        let next_trm = sing[add[sum[cur_trm], 1]]  {
             trm' = trm - n->cur_trm + n->next_trm
             n in followers implies {
                 candidates' = candidates + n
                 followers' = followers - n
-            } else {
+            }
+            else {
                 followers' = followers
                 candidates' = candidates
             }
         }
         network' = network
+        reserve' = reserve
         step' = sing[add[sum[step], 1]]
         leaders' = leaders
         voteTo' = voteTo
@@ -103,6 +107,7 @@ transition[State] fol_comm_cand{
         }
         
     }
+    reserve' = reserve
     network' = network
     step' = sing[add[sum[step], 1]]
     leaders' = leaders
@@ -133,7 +138,7 @@ transition[State] cand_comm_leader {
                
             } 
         -- 2. if there's no leader, nothing should happen
-        
+        reserve' = reserve
         network' = network
         step' = sing[add[sum[step], 1]]
     } 
@@ -167,6 +172,7 @@ transition[State] cand_comm_cand {
             trm' = trm
         }
     }
+    reserve' = reserve
     leaders' = leaders
     network' = network
     step' = sing[add[sum[step], 1]]
@@ -191,6 +197,7 @@ transition[State] become_leader {
             voteTo' = voteTo
             trm' = trm
         }
+    reserve' = reserve
     network' = network
     step' = sing[add[sum[step], 1]]        
 }
@@ -230,21 +237,62 @@ transition[State] heartbeat {
             candidates' = candidates
         }
     }
+    reserve' = reserve
     network' = network
     step' = sing[add[sum[step], 1]]
     voteTo' = voteTo
 }
 
 --TODO: add a livig new node into the network
---transition[State] addNode {}
+transition[State] addNode {
+    one n: reserve  {
+        network' = network + n
+        reserve' = reserve - n
+        followers' = followers + n
+        candidates' = candidates
+        leaders' = leaders
+        trm' = trm + n->sing[0]
+        voteTo' = voteTo
+        step' = sing[add[sum[step], 1]]
+    }
+}
 
---TODO: one node die, with means it no longer responds to any contact
+
+--TODO: one node die, which means it no longer responds to any contact
 -- and no timeout and etc. 
---transition[State] die {}
+transition[State] die {
+    some n: network {
+        network' = network - n
+        reserve' = reserve + n
+        trm' = trm
+        voteTo' = voteTo
+        step' = sing[add[sum[step], 1]]
+        
+        n in followers implies {
+          followers' = followers - n
+          candidates' = candidates
+          leaders' = leaders
+        }
+        
+        n in candidates implies {
+          followers' = followers 
+          candidates' = candidates - n
+          leaders' = leaders
+        }
+        
+        n in leaders implies {
+          followers' = followers
+          candidates' = candidates
+          leaders' = leaders - n
+        }
+   }
+      
+}
 
 transition[State] advance {
     // TODO
-    --heartbeat[this, this']
+    --addNode[this, this']
+    die[this, this']
 }
 ------------------------------Run----------------------
 state[State] testState {
@@ -258,27 +306,32 @@ state[State] testState {
     Majority.constant = sing[2] -- if #network = 3
 }
 
+state[State] testState2 {
+    all n: network | n->sing[0] in trm 
+    no voteTo
+    step = sing[0] 
+    followers = network - candidates - leaders
+    Majority.constant = sing[2] -- if #network = 3
+}
 
-trace<|State, testState, advance, _|> election {}
+trace<|State, testState2, advance, _|> election {}
 
 
 inst bounds {
-    #Node = 3
-    #State = 2
+    #Node = 5
 }
 
 pred wellFormed {
     stateInvariant[3]
     
     all n: Node | all s: State | {
-        n in s.network
-        one n.(s.trm)
-        lone n.(s.voteTo)
+        
+        n in s.network implies {
+            one n.(s.trm)
+            lone n.(s.voteTo)
+        }
     }
 }
 
 
 run <|election|> {wellFormed} for bounds
-
-
-
