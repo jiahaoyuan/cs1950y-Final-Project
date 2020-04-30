@@ -34,8 +34,6 @@ pred stateInvariant[nodeCount: Int] {
                    no s.followers & s.candidates -- no status can have more than two status
 }
 
-fun dom [r: univ->univ] : set (r.univ) { r.univ }
-
 ------------------------------State-------------------------------
 
 state[State] initState {
@@ -114,8 +112,6 @@ transition[State] fol_comm_cand{
 -- either the leader will vote for the candidate and fall back
 -- or the candidate will fall back to follower
 transition[State] cand_comm_leader {
-    -- TODO: jiayang
-    
     some cand: candidates | some lead: leaders {
          -- 1. if there's a leader
             -- 1.1 and the leader's trm is higher, the candidate should fall back to follower
@@ -147,7 +143,6 @@ transition[State] cand_comm_leader {
 -- Randomly choosing two candidate
 -- one may vote for the other
 transition[State] cand_comm_cand {
-    -- TODO: jiayang
     some cand1: candidates |some cand2: candidates - cand1 {
         sum[trm[cand1]] > sum[trm[cand2]] implies {
           -- 1. if cand1 has a higher term, cand2 will fall back to follower and should vote to cand1
@@ -180,7 +175,6 @@ transition[State] cand_comm_cand {
 
 
 transition[State] become_leader {
-    -- TODO: jiahao
     some cand: candidates|
         -- 1. if one candidate gets the majority of votes, it wins and will become the leader
         -- either a candidate wins or no winner
@@ -241,37 +235,16 @@ transition[State] heartbeat {
     voteTo' = voteTo
 }
 
+--TODO: add a livig new node into the network
+--transition[State] addNode {}
 
-/**
-transition[State] stay_same {
-    network' = network
-    step' = sing[add[sum[step], 1]]
-    leaders' = leaders
-    followers' = followers
-    candidates' = candidates
-    voteTo' = voteTo
-    trm' = trm
-}*/
+--TODO: one node die, with means it no longer responds to any contact
+-- and no timeout and etc. 
+--transition[State] die {}
 
 transition[State] advance {
-    /**
-    #candidates > 0 and #followers = 0 implies {
-        timeout[this, this']
-    }
-    #candidates = 0 and #followers > 0 implies {
-        timeout[this, this']
-    }
-    #candidates > 0 and #followers > 0 implies {
-        fol_comm_cand[this, this']
-        timeout[this, this']
-    }
-    */
-    --fol_comm_cand[this, this']
-    -- cand_comm_leader[this, this']
-    -- cand_comm_cand[this, this']
-    -- #candidates > 0 implies{become_leader[this, this']} 
-    --#leaders > 0 implies{heartbeat[this, this']}
-    heartbeat[this, this']
+    // TODO
+    --heartbeat[this, this']
 }
 ------------------------------Run----------------------
 state[State] testState {
@@ -285,59 +258,9 @@ state[State] testState {
     Majority.constant = sing[2] -- if #network = 3
 }
 
-state[State] testState2 {
-    no voteTo
-    step = sing[0]
-    #leaders = 1
-    all n: followers | n->sing[0] in trm
-    one n: candidates | n->sing[0] in trm
-    one n: leaders | n->sing[0] in trm
-   
-    Majority.constant = sing[2] -- if #network = 3
-}
 
-state[State] testState3 {
-    -- to test become_leader
-    -- two followers and one candidate, the candidate gets at least two votes and will become a leader
-    
-    all n: candidates | n->n in voteTo
-    step = sing[0]
-    no leaders
-    one candidates
-    one n: candidates {
-        n->sing[2] in trm
-        one n2: followers {
-            n2->n in voteTo
-            n2->sing[2] in trm
-            one n3: followers - n2| {
-                no n3.voteTo
-                n3->sing[1] in trm
-            }
-        }
-    }
-    
-    Majority.constant = sing[2] -- if #network = 3
-}
+trace<|State, testState, advance, _|> election {}
 
-state[State] testState4 {
-    no voteTo
-    step = sing[0]
-    #leaders = 1
-    no candidates
-    all n: followers | n->sing[0] in trm
-    --one n: candidates | n->sing[1] in trm
-    one n: leaders | n->sing[2] in trm
-   
-    Majority.constant = sing[2] -- if #network = 3
-}
-
-
---trace<|State, initState, advance, _|> election {}
---trace<|State, testState, advance, _|> election {}
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- The testcase created by Jiayang
-trace<|State, testState4, advance, _|> election {}
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 inst bounds {
     #Node = 3
