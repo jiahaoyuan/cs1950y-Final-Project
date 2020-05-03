@@ -45,7 +45,7 @@ sig Heartbeat extends Event {}
 -----------------------------Helper Predicates------------------------------------
 pred stateInvariant[nodeCount: Int] {
     all s: State | 
-                   #s.network = nodeCount and -- comment out later
+                   --#s.network = nodeCount and -- comment out later
                    Node = s.network + s.reserve and -- Nodes must either be in network or reserve
                    no s.network & s.reserve and
                    s.network = s.leaders + s.followers + s.candidates and
@@ -292,7 +292,8 @@ transition[State] die {
       
 }
 
-transition[State] stateTransition[e: Event] {
+----------------------Healthy Network -------------------
+transition[State] healthStateTransition[e: Event] {
     e.pre = this
     e.post = this'
     e in Timeout implies timeout[this, this']
@@ -303,7 +304,7 @@ transition[State] stateTransition[e: Event] {
     e in Heartbeat implies heartbeat[this, this']
 }
 
-transition[State] electionTransition {
+transition[State] healthElectionTransition {
     #leaders > 0 implies {
         # candidates <= 0 implies {
             one e: Timeout+Heartbeat | stateTransition[this, this', e]
@@ -320,7 +321,12 @@ transition[State] electionTransition {
     }   
 }
 
+----------------------Unhealthy Network ----------------------
+transition[State] unhealthStateTransition[e: Event] {}
+
+transition[State] unhealthElectionTransition {}
 ------------------------------Run----------------------
+/**
 state[State] testState {
     all n: followers | n->sing[0] in trm
     no voteTo
@@ -339,6 +345,7 @@ state[State] testState2 {
     followers = network - candidates - leaders
     Majority.constant = sing[2] -- if #network = 3
 }
+*/
 
 ----------------------------------------------------------------
 state[State] threeFollowers {
@@ -380,10 +387,16 @@ pred atLeastOneLeader {
     wellFormed
     some s: State | #s.leaders >= 1
 }
--- Finds two leaders of different term 
-pred twoLeaders {
+-- Finds two leaders of different term
+-- TODO: DEBUG
+pred twoLeadersDiffTerm {
     wellFormed
-    some s: State | #s.leaders >= 2
+    some s: State | {
+        #s.leaders = 2 
+        some n1: s.leaders | some n2: s.leaders-n1 {
+            s.trm[n1] != s.trm[n2]
+        }
+    }  
 }
 -- Finds two leaders of the same term
 pred twoLeadersSameTerm {
@@ -397,7 +410,7 @@ pred twoLeadersSameTerm {
 }
 
 check <|election|> {
-   -- not atLeastOneLeader
-   -- not twoLeaders
+   --not atLeastOneLeader
+    not twoLeadersDiffTerm
    -- not twoLeadersSameTerm
 } for bounds
