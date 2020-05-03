@@ -96,7 +96,7 @@ transition[State] fol_comm_cand{
         } else {
             -- 2.1 if the candidate's term is larger or (the candidates's term equals the follower's term and the follower
             --    has NOT voted), now the follower should vote to the candidate
-            ((sum[trm[cand]] > sum[trm[fol]]) or (sum[trm[cand]] == sum[trm[fol]] and no voteTo[fol])) implies{ 
+            ((sum[trm[cand]] > sum[trm[fol]]) or (sum[trm[cand]] = sum[trm[fol]] and no voteTo[fol])) implies{ 
                 some voteTo[fol] implies { -- if this fol has voted before, delete the old vote record and vote again
                     voteTo' = voteTo + fol->cand - fol->fol.voteTo
                 }
@@ -243,7 +243,13 @@ transition[State] heartbeat {
                     leaders' = leaders
                     followers' = followers
                     candidates' = candidates
-                    trm[m] = trm[n] implies (voteTo' = voteTo) else (voteTo' = voteTo - m->m) -- TODO: why m might vote to itself before?
+                    some m.voteTo implies { -- if m voted before, delete the old vote record
+                        voteTo' = voteTo - m->(m.voteTo)
+                    }
+                    else{
+                        voteTo' = voteTo
+                    }
+                       
                 }
            }
         } else {
@@ -260,28 +266,28 @@ transition[State] heartbeat {
     step' = sing[add[sum[step], 1]]
 }
 
---TODO: add a livig new node into the network
+-- Transition 7: add one node into the network from reserve
 transition[State] addNode {
     one n: reserve  {
         network' = network + n
         reserve' = reserve - n
+        
         followers' = followers + n
         candidates' = candidates
         leaders' = leaders
+        
         trm' = trm + n->sing[0]
         voteTo' = voteTo
         step' = sing[add[sum[step], 1]]
     }
 }
 
-
---TODO: one node die, which means it no longer responds to any contact
--- and no timeout and etc. 
+-- Transition 8: let one node die and it can no longer responds to others
 transition[State] die {
     some n: network {
         network' = network - n
         reserve' = reserve + n
-        trm' = trm - n->trm.n
+        trm' = trm - n->(n.trm)
         voteTo' = voteTo
         step' = sing[add[sum[step], 1]]
         
@@ -307,7 +313,7 @@ transition[State] die {
 }
 
 ----------------------Healthy Network -------------------
-transition[State] healthStateTransition[e: Event] {
+transition[State] healthyStateTransition[e: Event] {
     e.pre = this
     e.post = this'
     e in Timeout implies timeout[this, this']
@@ -318,27 +324,43 @@ transition[State] healthStateTransition[e: Event] {
     e in Heartbeat implies heartbeat[this, this']
 }
 
-transition[State] healthElectionTransition {
+transition[State] healthyElectionTransition {
     #leaders > 0 implies {
         # candidates <= 0 implies {
-            one e: Timeout+Heartbeat | stateTransition[this, this', e]
+            one e: Timeout+Heartbeat | healthyStateTransition[this, this', e]
         }else {
-            one e: Event | stateTransition[this, this', e]
+            one e: Event | healthyStateTransition[this, this', e]
         }
     } else {
         #candidates > 0 implies {
-            one e: Event-Heartbeat | stateTransition[this, this', e]
+            one e: Event-Heartbeat | healthyStateTransition[this, this', e]
         } else {
             -- no leaders or candidates:
-            one e: Timeout | stateTransition[this, this', e]
+            one e: Timeout | healthyStateTransition[this, this', e]
         }
     }   
 }
 
 ----------------------Unhealthy Network ----------------------
-transition[State] unhealthStateTransition[e: Event] {}
+transition[State] unhealthyStateTransition[e: Event] {
+    #leaders > 0 implies {
+        # candidates <= 0 implies {
+            one e: Timeout+Heartbeat | unhealthyStateTransition[this, this', e]
+        }else {
+            one e: Event | unhealthyStateTransition[this, this', e]
+        }
+    } else {
+        #candidates > 0 implies {
+            one e: Event-Heartbeat | unhealthyStateTransition[this, this', e]
+        } else {
+            -- no leaders or candidates:
+            one e: Timeout | unhealthyStateTransition[this, this', e]
+        }
+    }
 
-transition[State] unhealthElectionTransition {}
+}
+
+--transition[State] unhealthyElectionTransition {}
 ------------------------------Run----------------------
 /**
 state[State] testState {
@@ -371,10 +393,10 @@ state[State] threeFollowers {
     followers = network 
 }
 
-trace<|State, threeFollowers, electionTransition, _|> election {}
+trace<|State, threeFollowers, healthyElectionTransition, _|> election {}
 
 pred wellFormedEvent {
-    Event = Timeout + Foll_Cand+Cand_Leader+Cand_Cand+CountVotes+Heartbeat
+    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat
     all s: election.tran.State | one e: Event | e.pre = s
 }
 ----------------------------Bounds-------------------------------
@@ -424,7 +446,7 @@ pred twoLeadersSameTerm {
 }
 
 check <|election|> {
-   --not atLeastOneLeader
-    not twoLeadersDiffTerm
+   not atLeastOneLeader
+    -- not twoLeadersDiffTerm
    -- not twoLeadersSameTerm
 } for bounds
