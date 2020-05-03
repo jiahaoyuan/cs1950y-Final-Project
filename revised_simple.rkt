@@ -22,47 +22,52 @@ sig State {
     followers: set Node,
     candidates: set Node,
     voteTo: set Node->Node,
-    trm: set Node->Int -- e.g. for node n, its term is term[n] or n.term
+    trm: set Node->Int,  -- e.g. for node n, its term is term[n] or n.term
+    tr: one Int
 }
 
 
 -----------------------------Helper Predicates------------------------------------
 pred stateInvariant[nodeCount: Int] {
-    all s: State | 
+    all s: State | #s.network = nodeCount and 
                    Node = s.network + s.reserve and -- Nodes must either be in network or reserve
                    no s.network & s.reserve and
                    s.network = s.leaders + s.followers + s.candidates and
                    no s.leaders & s.followers and
                    no s.leaders & s.candidates and
                    no s.followers & s.candidates -- no status can have more than two status
+                   #Majority = 1 and
+                   Majority.constant = sing[2] -- if #network = 3
+                   
 }
 
-------------------------------State-------------------------------
-
-state[State] initState {
-    all n: network | n->sing[0] in trm
-    no voteTo
-    step = sing[0] 
-    no leaders
-    no candidates
-    followers = network
-    Majority.constant = sing[2] -- if #network = 3
+----------------------------Events------------------------------------------------
+sig Event {
+    pre: one State,
+    post: one State
 }
 
-------------------------------Transition--------------------------
+sig Timeout extends Event {}
+sig Foll_Cand extends Event {}
+sig Cand_Leader extends Event {}
+sig Cand_Cand extends Event {}
+sig CountVotes extends Event {}
+sig Heartbeat extends Event {}
+--sig AddNode extends Event {}
+--sig FailNode extends Event {}
 
+
+---------------------------------------------------------------------------------
 -- randomly select a follower or a leader to timeout
-transition[State] timeout { 
-    one n : network - leaders | let cur_trm = trm[n] |
+transition[State] timeout {
+    tr' = sing[1]
+    -- no need to timeout for candidates or leaders
+    one n : followers | let cur_trm = trm[n] |
         let next_trm = sing[add[sum[cur_trm], 1]]  {
             trm' = trm - n->cur_trm + n->next_trm
             n in followers implies {
                 candidates' = candidates + n
                 followers' = followers - n
-            }
-            else {
-                followers' = followers
-                candidates' = candidates
             }
         }
         network' = network
@@ -76,13 +81,8 @@ transition[State] timeout {
 -- the follower should decide if it wanna to vote
 -- candidate could also fall back if its term is smaller
 transition[State] fol_comm_cand{
+    tr' = sing[2]
     some fol: followers | some cand: candidates {
-    -- ************************************************
-    -- Jiahao's comment: WARNING! If you say one fol or one cand, it is unsat!
-    -- one means one and only one satisfy the following.
-    -- Use some! It will pick any individuals or a combination of individuals.
-    --fol = Node1 or Node2 run 1
-    -- ***********************************************
         sum[trm[cand]] < sum[trm[fol]]  implies {
             -- update candidate's term to follower's term
             trm' = trm - cand->trm[cand] + cand->trm[fol]
@@ -92,7 +92,7 @@ transition[State] fol_comm_cand{
             -- rest stay the same
             voteTo' = voteTo
         } else {
-            sum[trm[cand]] > sum[trm[fol]] or (sum[trm[cand] = sum[trm[fol] and no voteTo[fol]]]) implies { -- now testcase here
+            sum[trm[cand]] > sum[trm[fol]] or (sum[trm[cand]] >= sum[trm[fol]] and no voteTo[fol]) implies { -- now testcase here
                 voteTo' = voteTo + fol->cand
                 trm' = trm - fol->trm[fol] + fol->trm[cand]
                 -- rest stay the same
@@ -117,6 +117,7 @@ transition[State] fol_comm_cand{
 -- either the leader will vote for the candidate and fall back
 -- or the candidate will fall back to follower
 transition[State] cand_comm_leader {
+    tr' = sing[3]
     some cand: candidates | some lead: leaders {
          -- 1. if there's a leader
             -- 1.1 and the leader's trm is higher, the candidate should fall back to follower
@@ -148,6 +149,7 @@ transition[State] cand_comm_leader {
 -- Randomly choosing two candidate
 -- one may vote for the other
 transition[State] cand_comm_cand {
+    tr' = sing[4]
     some cand1: candidates |some cand2: candidates - cand1 {
         sum[trm[cand1]] > sum[trm[cand2]] implies {
           -- 1. if cand1 has a higher term, cand2 will fall back to follower and should vote to cand1
@@ -181,6 +183,7 @@ transition[State] cand_comm_cand {
 
 
 transition[State] become_leader {
+    tr' = sing[5]
     some cand: candidates|
         -- 1. if one candidate gets the majority of votes, it wins and will become the leader
         -- either a candidate wins or no winner
@@ -207,6 +210,7 @@ transition[State] become_leader {
 -- reset all the attr of this member to wanted
 -- otherwise, leader fallback 
 transition[State] heartbeat {
+    tr' = sing[6]
     some n : leaders | some m: network-n {--could be more than one leader, each at different term
         sum[trm[n]] >= sum[trm[m]] implies {
             -- reset the member's attribute term, status
@@ -245,6 +249,7 @@ transition[State] heartbeat {
 
 --TODO: add a livig new node into the network
 transition[State] addNode {
+    tr' = sing[7]
     one n: reserve  {
         network' = network + n
         reserve' = reserve - n
@@ -261,6 +266,7 @@ transition[State] addNode {
 --TODO: one node die, which means it no longer responds to any contact
 -- and no timeout and etc. 
 transition[State] die {
+    tr' = sing[8]
     some n: network {
         network' = network - n
         reserve' = reserve + n
@@ -289,10 +295,15 @@ transition[State] die {
       
 }
 
-transition[State] advance {
-    // TODO
-    --addNode[this, this']
-    die[this, this']
+transition[State] stateTransition[e: Event] {
+    e.pre = this
+    e.post = this'
+    e in Timeout implies timeout[this, this']
+    e in Cand_Cand implies cand_comm_cand[this, this']
+    e in Foll_Cand implies fol_comm_cand[this, this']
+    e in Cand_Leader implies cand_comm_leader[this, this']
+    e in CountVotes implies become_leader[this, this']
+    e in Heartbeat implies heartbeat[this, this']
 }
 ------------------------------Run----------------------
 state[State] testState {
@@ -314,14 +325,49 @@ state[State] testState2 {
     Majority.constant = sing[2] -- if #network = 3
 }
 
-trace<|State, testState2, advance, _|> election {}
+---------------------------------------------------------
+state[State] threeFollowers {
+    all n: network | n->sing[0] in trm
+    no voteTo
+    step = sing[0] 
+    no leaders
+    no candidates
+    followers = network
+}
 
+transition[State] electionTransition {
+    #leaders > 0 implies {
+        # candidates < 0 implies {
+            one e: Timeout+Heartbeat | stateTransition[this, this', e]
+        }else {
+            one e: Event | stateTransition[this, this', e]
+        }
+    } else {
+        #candidates > 0 implies {
+            one e: Event-Heartbeat | stateTransition[this, this', e]
+        } else {
+            -- no leaders or candidates:
+            one e: Timeout | stateTransition[this, this', e]
+        }
+    }
+         
+}
+trace<|State, threeFollowers, electionTransition, _|> election {}
+
+pred wellFormedEvent {
+    Event = Timeout + Foll_Cand+Cand_Leader+Cand_Cand+CountVotes+Heartbeat
+    -- every event is used
+    all s: election.tran.State | one e: Event | e.pre = s
+}
 
 inst bounds {
-    #Node = 5
+    #Node = 3
+    #State = 10
+    #Event = 9
 }
 
 pred wellFormed {
+    wellFormedEvent
     stateInvariant[3]
     
     all n: Node | all s: State | {
@@ -332,6 +378,5 @@ pred wellFormed {
         }
     }
 }
-
 
 run <|election|> {wellFormed} for bounds
