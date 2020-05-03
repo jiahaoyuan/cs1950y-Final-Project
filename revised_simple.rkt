@@ -70,7 +70,7 @@ transition[State] timeout {
             n in candidates implies {             -- only update the term
                 candidates' = candidates
                 followers' = followers
-                voteTo' = voteTo
+                voteTo' = voteTo - voteTo.n->n + n->n
             }
         }
         
@@ -224,31 +224,29 @@ transition[State] heartbeat {
         sum[trm[n]] >= sum[trm[m]] implies {
             let newTerm = trm - m->trm[m] + m->trm[n] | {
                 trm' = newTerm
-            
+                sum[trm[n]] > sum[trm[m]] implies { -- if m voted before, delete the old vote record
+                    voteTo' = voteTo - m->(m.voteTo)
+                }
+                else{
+                    voteTo' = voteTo
+                }
+                    
                 m in candidates implies {
                     candidates' = candidates - m
                     followers' = followers + m
                     leaders' = leaders
-                    voteTo' = voteTo - m->m
                 }
             
                 m in leaders implies {
                     leaders' = leaders - m
                     followers' = followers + m
                     candidates' = candidates
-                    voteTo' = voteTo - m->m
                 }
         
                 m in followers implies {
                     leaders' = leaders
                     followers' = followers
                     candidates' = candidates
-                    some m.voteTo implies { -- if m voted before, delete the old vote record
-                        voteTo' = voteTo - m->(m.voteTo)
-                    }
-                    else{
-                        voteTo' = voteTo
-                    }
                        
                 }
            }
@@ -343,21 +341,15 @@ transition[State] healthyElectionTransition {
 
 ----------------------Unhealthy Network ----------------------
 transition[State] unhealthyStateTransition[e: Event] {
-    #leaders > 0 implies {
-        # candidates <= 0 implies {
-            one e: Timeout+Heartbeat | unhealthyStateTransition[this, this', e]
-        }else {
-            one e: Event | unhealthyStateTransition[this, this', e]
-        }
-    } else {
-        #candidates > 0 implies {
-            one e: Event-Heartbeat | unhealthyStateTransition[this, this', e]
-        } else {
-            -- no leaders or candidates:
-            one e: Timeout | unhealthyStateTransition[this, this', e]
-        }
-    }
-
+    e.pre = this
+    e.post = this'
+    e in Timeout implies timeout[this, this']
+    e in Cand_Cand implies cand_comm_cand[this, this']
+    e in Foll_Cand implies fol_comm_cand[this, this']
+    e in Cand_Leader implies cand_comm_leader[this, this']
+    e in CountVotes implies become_leader[this, this']
+    e in Heartbeat implies heartbeat[this, this']
+    --e in AddNode impilie
 }
 
 --transition[State] unhealthyElectionTransition {}
@@ -446,7 +438,7 @@ pred twoLeadersSameTerm {
 }
 
 check <|election|> {
-   not atLeastOneLeader
-    -- not twoLeadersDiffTerm
-   -- not twoLeadersSameTerm
+   --not atLeastOneLeader  --sat
+    --not twoLeadersDiffTerm --sat
+   not twoLeadersSameTerm -- unsat
 } for bounds
