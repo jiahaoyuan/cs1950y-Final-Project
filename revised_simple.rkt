@@ -87,12 +87,15 @@ transition[State] timeout {
 -- candidate could also fall back if its term is smaller than the follower's term
 transition[State] fol_comm_cand{
     some fol: followers | some cand: candidates {
+       -- 1. if the candidate's term is smaller, it should fall back
         sum[trm[cand]] < sum[trm[fol]]  implies {
             trm' = trm - cand->trm[cand] + cand->trm[fol] -- update candidate's term to follower's term
             candidates' = candidates - cand               -- fallback
             followers' = followers + cand
             voteTo' = voteTo - cand->cand
         } else {
+            -- 2.1 if the candidate's term is larger or (the candidates's term equals the follower's term and the follower
+            --    has NOT voted), now the follower should vote to the candidate
             ((sum[trm[cand]] > sum[trm[fol]]) or (sum[trm[cand]] == sum[trm[fol]] and no voteTo[fol])) implies{ 
                 some voteTo[fol] implies { -- if this fol has voted before, delete the old vote record and vote again
                     voteTo' = voteTo + fol->cand - fol->fol.voteTo
@@ -104,18 +107,18 @@ transition[State] fol_comm_cand{
                 trm' = trm - fol->trm[fol] + fol->trm[cand] -- update the follower's term to the candidate's term
                 followers' = followers
                 candidates' = candidates
-            } else { -- in other situations, do nothing
+            } else {
+            -- 2.2 in other situations, do nothing
                     followers' = followers
                     candidates' = candidates
                     voteTo' = voteTo
                     trm' = trm
-                }
+            }
         }  
-    }
-    
+    }   
     reserve' = reserve
     network' = network
-    step' = sing[add[sum[step], 1]]
+    step' = sing[add[sum[step], 1]] -- update the step
     leaders' = leaders
 }
 
@@ -170,13 +173,14 @@ transition[State] cand_comm_cand {
           followers' = followers + cand1
           voteTo' = voteTo + cand1->cand2 - cand1->cand1
           trm' = trm - cand1->trm[cand1] + cand1->trm[cand2]
-      
+
         }
         sum[trm[cand1]] = sum[trm[cand2]] implies {
-            candidates' = candidates
-            followers' = followers
-            voteTo' = voteTo
-            trm' = trm
+          -- 3. if terms are equal, nothing should happen
+          candidates' = candidates
+          followers' = followers
+          voteTo' = voteTo
+          trm' = trm
         }
     }
     reserve' = reserve
@@ -185,8 +189,8 @@ transition[State] cand_comm_cand {
     step' = sing[add[sum[step], 1]]
 }
 
-
-
+-- Transition 5: one candidate become a leader
+-- if a candidate receives the majority of votes in the network, it will then become a leader
 transition[State] become_leader {
     some cand: candidates|
         -- 1. if one candidate gets the majority of votes, it wins and will become the leader
@@ -196,8 +200,9 @@ transition[State] become_leader {
             leaders' = leaders + cand
             followers' = network - candidates' - leaders'
             voteTo' = voteTo
-            trm' = trm -- need to rewrite this to make sure all nodes in the network have the same trm
-        } else {     
+            trm' = trm 
+        } else {
+        -- 2. if this candidate is not qualified to win, nothing should happen
             candidates' = candidates
             leaders' = leaders 
             followers' = followers
@@ -209,41 +214,40 @@ transition[State] become_leader {
     step' = sing[add[sum[step], 1]]        
 }
 
+-- Transition 6: the leader sends heartbeat
 -- To simulate leader sending heatbeat to other members
--- if the leader's term is greater or equal:
--- reset all the attr of this member to wanted
+-- if the leader's term is greater or equal, then reset all the attr of this member to wanted
 -- otherwise, leader fallback 
 transition[State] heartbeat {
-    some n : leaders | some m: network-n {--could be more than one leader, each at different term
+    some n : leaders | some m: network - n {--could be more than one leader, each at different term
+        -- 1. if n's term is higher, reset m's term and type
         sum[trm[n]] >= sum[trm[m]] implies {
-            -- reset the member's attribute term, status
             let newTerm = trm - m->trm[m] + m->trm[n] | {
-            trm' = newTerm
+                trm' = newTerm
             
-            m in candidates implies {
-                candidates' = candidates - m
-                followers' = followers + m
-                leaders' = leaders
-                voteTo' = voteTo - m->m
-            }
+                m in candidates implies {
+                    candidates' = candidates - m
+                    followers' = followers + m
+                    leaders' = leaders
+                    voteTo' = voteTo - m->m
+                }
             
-            m in leaders implies {
-                leaders' = leaders - m
-                followers' = followers + m
-                candidates' = candidates
-                voteTo' = voteTo - m->m
-            }
+                m in leaders implies {
+                    leaders' = leaders - m
+                    followers' = followers + m
+                    candidates' = candidates
+                    voteTo' = voteTo - m->m
+                }
         
-            m in followers implies {
-                leaders' = leaders
-                followers' = followers
-                candidates' = candidates
-                trm[m] = trm[n] implies (voteTo' = voteTo) else (voteTo' = voteTo - m->m)
-            }
-        }
-            
+                m in followers implies {
+                    leaders' = leaders
+                    followers' = followers
+                    candidates' = candidates
+                    trm[m] = trm[n] implies (voteTo' = voteTo) else (voteTo' = voteTo - m->m) -- TODO: why m might vote to itself before?
+                }
+           }
         } else {
-            -- leader's term is smaller, reset leader
+            -- 2. if the leader's term is smaller, reset leader
             trm' = trm - n->trm[n] + n->trm[m]
             leaders' = leaders - n
             followers' = followers + n
