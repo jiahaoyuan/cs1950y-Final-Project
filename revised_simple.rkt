@@ -27,7 +27,7 @@ sig State {
 
 
 -----------------------------Helper Predicates------------------------------------
-pred stateInvariant[nodeCount: Int] {
+pred stateInvariant[nodeCount: Int] { -- Jiahao: we should remove this nodecount here since it does not matter
     all s: State | 
                    Node = s.network + s.reserve and -- Nodes must either be in network or reserve
                    no s.network & s.reserve and
@@ -264,7 +264,7 @@ transition[State] die {
     some n: network {
         network' = network - n
         reserve' = reserve + n
-        trm' = trm
+        trm' = trm --Jiahao: here the trm should remove n's trm, since we are adding the term(0) in addNode
         voteTo' = voteTo
         step' = sing[add[sum[step], 1]]
         
