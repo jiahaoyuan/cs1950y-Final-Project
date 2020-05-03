@@ -350,9 +350,26 @@ transition[State] unhealthyStateTransition[e: Event] {
     e in CountVotes implies become_leader[this, this']
     e in Heartbeat implies heartbeat[this, this']
     --e in AddNode impilie
+    e in AddNode implies addNode[this, this']
+    e in FailNode implies die[this, this']
 }
 
---transition[State] unhealthyElectionTransition {}
+transition[State] unhealthyElectionTransition {
+    #leaders > 0 implies {
+        # candidates <= 0 implies {
+            one e: Timeout+Heartbeat+AddNode+FailNode | healthyStateTransition[this, this', e]
+        }else {
+            one e: Event | healthyStateTransition[this, this', e]
+        }
+    } else {
+        #candidates > 0 implies {
+            one e: Event-Heartbeat | healthyStateTransition[this, this', e]
+        } else {
+            -- no leaders or candidates:
+            one e: Timeout+AddNode+FailNode | healthyStateTransition[this, this', e]
+        }
+    }   
+}
 
 ------------------------- Section 6. Initial State ----------------------
 
@@ -366,6 +383,8 @@ state[State] threeFollowers {
 }
 
 trace<|State, threeFollowers, healthyElectionTransition, _|> election {}
+
+trace<|State, threeFollowers, unhealthyElectionTransition, _|> unhealthyElection {}
 
 pred wellFormedEventHealthy {
     Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat
@@ -425,10 +444,23 @@ pred twoLeadersSameTerm {
     }  
 }
 
-run <|election|> {
-   atLeastOneLeader  --sat
-   twoLeadersDiffTerm --sat
-   twoLeadersSameTerm -- unsat
-} for bounds
+--run <|election|> {
+   --atLeastOneLeader  --sat
+   --twoLeadersDiffTerm --sat
+   --twoLeadersSameTerm -- unsat
+--} for bounds
 
 ----------------------------Section 8. Correctness Testing, Unhealthy Network----------------------------------
+-- Finds a leader within the bounds 
+pred atLeastOneLeaderUnHealthy {
+    wellFormed
+    wellFormedEventHealthy
+    some s: State | #s.leaders >= 1
+}
+
+run <|unhealthyElection|> {
+   atLeastOneLeader  --sat
+   --twoLeadersDiffTerm --sat
+   --twoLeadersSameTerm -- unsat
+} for bounds
+
