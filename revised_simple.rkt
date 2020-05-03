@@ -1,11 +1,6 @@
 #lang forge
 
 ---------------- Part 1. Sig Declaration ----------
-sig Status {}
-sig Follower extends Status{}
-sig Candidate extends Status{}
-sig Leader extends Status{}
-
 sig Node {
     --id: one Int
 }
@@ -37,62 +32,68 @@ sig Cand_Leader extends Event {}
 sig Cand_Cand extends Event {}
 sig CountVotes extends Event {}
 sig Heartbeat extends Event {}
---sig AddNode extends Event {}
---sig FailNode extends Event {}
+sig AddNode extends Event {}
+sig FailNode extends Event {}
 
 
 
 -----------------------------Helper Predicates------------------------------------
 pred stateInvariant[nodeCount: Int] {
-    all s: State | 
-                   #s.network = nodeCount and -- comment out later
-                   Node = s.network + s.reserve and -- Nodes must either be in network or reserve
+    all s: State | Node = s.network + s.reserve and -- Nodes must either be in network or reserve
                    no s.network & s.reserve and
-                   s.network = s.leaders + s.followers + s.candidates and
+                   
+                   s.network = s.leaders + s.followers + s.candidates and -- Nodes must be a follower or a leader or a candidate
                    no s.leaders & s.followers and
                    no s.leaders & s.candidates and
-                   no s.followers & s.candidates and-- no status can have more than two status
-                   #Majority = 1 and
+                   no s.followers & s.candidates and
+                   
+                   #Majority = 1 and -- Majority.constant is the number of the majority in network
                    Majority.constant = sing[2] -- if #network = 3
                    
    
 }
 
 --------------------------------Transitions---------------------------------------
--- randomly select a follower or a leader to timeout
+-- Transition 1: timeout
+-- randomly select a follower or a candidate to timeout, when a node timeouts, it should become
+-- a candidate and increment its term by 1. Each candidate will vote to itself.
 transition[State] timeout {
-    -- no need to timeout for candidates or leaders
-    one n : followers | let cur_trm = trm[n] |
+    -- no need to timeout for candidates or leaders  
+    some n : followers + candidates| let cur_trm = trm[n] | 
         let next_trm = sing[add[sum[cur_trm], 1]]  {
-            trm' = trm - n->cur_trm + n->next_trm
-            candidates' = candidates + n
+            trm' = trm - n->cur_trm + n->next_trm -- increment n's term
+            candidates' = candidates + n          -- n becomes a candidate from a follower
             followers' = followers - n
-            voteTo' = voteTo + n->n -- vote for self
+            voteTo' = voteTo + n->n               -- vote for itself
         }
+        
         network' = network
         reserve' = reserve
-        step' = sing[add[sum[step], 1]]
+        step' = sing[add[sum[step], 1]]           
         leaders' = leaders
     }
 
+-- Transition 2: followers communicate candidates
 -- randomly select a follower and a candidate
--- the follower should decide if it wanna to vote
--- candidate could also fall back if its term is smaller
+-- the follower should decide if it wanna vote
+-- candidate could also fall back if its term is smaller than the follower's term
 transition[State] fol_comm_cand{
     some fol: followers | some cand: candidates {
         sum[trm[cand]] < sum[trm[fol]]  implies {
-            -- update candidate's term to follower's term
-            trm' = trm - cand->trm[cand] + cand->trm[fol]
-            -- fallback
-            candidates' = candidates - cand
+            trm' = trm - cand->trm[cand] + cand->trm[fol] -- update candidate's term to follower's term
+            candidates' = candidates - cand               -- fallback
             followers' = followers + cand
-            -- rest stay the same
             voteTo' = voteTo - cand->cand
         } else {
-            ((sum[trm[cand]] > sum[trm[fol]]) or (sum[trm[cand]] >= sum[trm[fol]] and no voteTo[fol])) implies { -- now testcase here
-                voteTo' = voteTo + fol->cand
-                trm' = trm - fol->trm[fol] + fol->trm[cand]
-                -- rest stay the same
+            ((sum[trm[cand]] > sum[trm[fol]]) or (sum[trm[cand]] == sum[trm[fol]] and no voteTo[fol])) implies{ 
+                some voteTo[fol] implies { -- if this fol has voted before, delete the old vote record and vote again
+                    voteTo' = voteTo + fol->cand - fol->fol.voteTo
+                }
+                else { 
+                     voteTo' = voteTo + fol->cand
+                }
+                
+                trm' = trm - fol->trm[fol] + fol->trm[cand] -- update the follower's term to the candidate's term
                 followers' = followers
                 candidates' = candidates
             } else { -- in other situations, do nothing
@@ -101,15 +102,14 @@ transition[State] fol_comm_cand{
                     voteTo' = voteTo
                     trm' = trm
                 }
-        }
-        
+        }  
     }
+    
     reserve' = reserve
     network' = network
     step' = sing[add[sum[step], 1]]
     leaders' = leaders
 }
-
 -- Randomly choosing a candidate and a leader
 -- either the leader will vote for the candidate and fall back
 -- or the candidate will fall back to follower
@@ -292,7 +292,8 @@ transition[State] die {
       
 }
 
-transition[State] stateTransition[e: Event] {
+----------------------Healthy Network -------------------
+transition[State] healthStateTransition[e: Event] {
     e.pre = this
     e.post = this'
     e in Timeout implies timeout[this, this']
@@ -303,7 +304,7 @@ transition[State] stateTransition[e: Event] {
     e in Heartbeat implies heartbeat[this, this']
 }
 
-transition[State] electionTransition {
+transition[State] healthElectionTransition {
     #leaders > 0 implies {
         # candidates <= 0 implies {
             one e: Timeout+Heartbeat | stateTransition[this, this', e]
@@ -320,7 +321,12 @@ transition[State] electionTransition {
     }   
 }
 
+----------------------Unhealthy Network ----------------------
+transition[State] unhealthStateTransition[e: Event] {}
+
+transition[State] unhealthElectionTransition {}
 ------------------------------Run----------------------
+/**
 state[State] testState {
     all n: followers | n->sing[0] in trm
     no voteTo
@@ -339,6 +345,7 @@ state[State] testState2 {
     followers = network - candidates - leaders
     Majority.constant = sing[2] -- if #network = 3
 }
+*/
 
 ----------------------------------------------------------------
 state[State] threeFollowers {
@@ -380,10 +387,16 @@ pred atLeastOneLeader {
     wellFormed
     some s: State | #s.leaders >= 1
 }
--- Finds two leaders of different term 
-pred twoLeaders {
+-- Finds two leaders of different term
+-- TODO: DEBUG
+pred twoLeadersDiffTerm {
     wellFormed
-    some s: State | #s.leaders >= 2
+    some s: State | {
+        #s.leaders = 2 
+        some n1: s.leaders | some n2: s.leaders-n1 {
+            s.trm[n1] != s.trm[n2]
+        }
+    }  
 }
 -- Finds two leaders of the same term
 pred twoLeadersSameTerm {
@@ -397,8 +410,7 @@ pred twoLeadersSameTerm {
 }
 
 check <|election|> {
-   -- not atLeastOneLeader
-   -- not twoLeaders
+   --not atLeastOneLeader
+    not twoLeadersDiffTerm
    -- not twoLeadersSameTerm
 } for bounds
-
