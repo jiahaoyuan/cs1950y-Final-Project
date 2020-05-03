@@ -49,8 +49,27 @@ pred stateInvariant[nodeCount: Int] {
                    
                    #Majority = 1 and -- Majority.constant is the number of the majority in network
                    Majority.constant = sing[2] -- if #network = 3
-                   
-   
+}
+
+pred wellFormedEventHealthy {
+    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat
+    all s: election.tran.State | one e: Event | e.pre = s
+}
+
+pred wellFormedEventUnhealthy {
+    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat -- TODO: need to add die and addition
+    all s: election.tran.State | one e: Event | e.pre = s
+}
+
+pred wellFormed {
+    -- wellFormedEvent -- wellFormedEventHealthy and wellFormedEventUnhealthy will be added seperated into run
+    stateInvariant[3]
+    all n: Node | all s: State | {
+        n in s.network implies {
+            one n.(s.trm)
+            lone n.(s.voteTo)
+        }
+    }
 }
 
 ----------------------Section 3. Transitions---------------------------------------
@@ -367,22 +386,6 @@ state[State] threeFollowers {
 
 trace<|State, threeFollowers, healthyElectionTransition, _|> election {}
 
-pred wellFormedEvent {
-    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat
-    all s: election.tran.State | one e: Event | e.pre = s
-}
-
-pred wellFormed {
-    wellFormedEvent
-    stateInvariant[3]
-    all n: Node | all s: State | {
-        n in s.network implies {
-            one n.(s.trm)
-            lone n.(s.voteTo)
-        }
-    }
-}
-
 inst bounds {
     #Node = 3
     #State = 10
@@ -424,4 +427,3 @@ check <|election|> {
 } for bounds
 
 ----------------------------Section 8. Correctness Testing, Unhealthy Network----------------------------------
-
