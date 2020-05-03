@@ -1,6 +1,6 @@
 #lang forge
 
----------------- Part 1. Sig Declaration ----------
+---------------- Section 1. Sig Declaration ----------
 sig Node {
     --id: one Int
 }
@@ -37,7 +37,7 @@ sig FailNode extends Event {}
 
 
 
------------------------------Helper Predicates------------------------------------
+----------------------Section 2. Helper Predicates------------------------------------
 pred stateInvariant[nodeCount: Int] {
     all s: State | Node = s.network + s.reserve and -- Nodes must either be in network or reserve
                    no s.network & s.reserve and
@@ -53,7 +53,7 @@ pred stateInvariant[nodeCount: Int] {
    
 }
 
---------------------------------Transitions---------------------------------------
+----------------------Section 3. Transitions---------------------------------------
 -- Transition 1: timeout
 -- randomly select a follower or a candidate to timeout, when a node timeouts, it should become
 -- a candidate and increment its term by 1. Each candidate will vote to itself.
@@ -274,7 +274,7 @@ transition[State] addNode {
         candidates' = candidates
         leaders' = leaders
         
-        trm' = trm + n->sing[0]
+        trm' = trm + n->sing[0] --TODO: if making it start at trm zero, then we should remove its voteTo in die
         voteTo' = voteTo
         step' = sing[add[sum[step], 1]]
     }
@@ -310,7 +310,7 @@ transition[State] die {
       
 }
 
-----------------------Healthy Network -------------------
+-------------------Section 4. Healthy Network -------------------
 transition[State] healthyStateTransition[e: Event] {
     e.pre = this
     e.post = this'
@@ -339,7 +339,7 @@ transition[State] healthyElectionTransition {
     }   
 }
 
-----------------------Unhealthy Network ----------------------
+----------------------Section 5. Unhealthy Network ----------------------
 transition[State] unhealthyStateTransition[e: Event] {
     e.pre = this
     e.post = this'
@@ -353,29 +353,9 @@ transition[State] unhealthyStateTransition[e: Event] {
 }
 
 --transition[State] unhealthyElectionTransition {}
-------------------------------Run----------------------
-/**
-state[State] testState {
-    all n: followers | n->sing[0] in trm
-    no voteTo
-    step = sing[0] 
-    no leaders
-    #candidates = 1
-    one n: candidates | n->sing[0] in trm
-    followers = network - candidates
-    Majority.constant = sing[2] -- if #network = 3
-}
 
-state[State] testState2 {
-    all n: network | n->sing[0] in trm 
-    no voteTo
-    step = sing[0] 
-    followers = network - candidates - leaders
-    Majority.constant = sing[2] -- if #network = 3
-}
-*/
+------------------------- Section 6. Initial State ----------------------
 
-----------------------------------------------------------------
 state[State] threeFollowers {
     all n: network | n->sing[0] in trm
     no voteTo
@@ -391,12 +371,6 @@ pred wellFormedEvent {
     Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat
     all s: election.tran.State | one e: Event | e.pre = s
 }
-----------------------------Bounds-------------------------------
-inst bounds {
-    #Node = 3
-    #State = 10
-    #Event = 9
-}
 
 pred wellFormed {
     wellFormedEvent
@@ -408,7 +382,13 @@ pred wellFormed {
         }
     }
 }
-----------------------------Testing----------------------------------
+
+inst bounds {
+    #Node = 3
+    #State = 10
+    #Event = 9
+}
+----------------------------Section 7. Correctness Testing, Healthy Network----------------------------------
 
 -- Finds a leader within the bounds 
 pred atLeastOneLeader {
@@ -442,3 +422,6 @@ check <|election|> {
     --not twoLeadersDiffTerm --sat
    not twoLeadersSameTerm -- unsat
 } for bounds
+
+----------------------------Section 8. Correctness Testing, Unhealthy Network----------------------------------
+
