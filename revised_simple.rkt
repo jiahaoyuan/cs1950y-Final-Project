@@ -62,9 +62,16 @@ transition[State] timeout {
     some n : followers + candidates| let cur_trm = trm[n] | 
         let next_trm = sing[add[sum[cur_trm], 1]]  {
             trm' = trm - n->cur_trm + n->next_trm -- increment n's term
-            candidates' = candidates + n          -- n becomes a candidate from a follower
-            followers' = followers - n
-            voteTo' = voteTo + n->n               -- vote for itself
+            n in followers implies {
+                candidates' = candidates + n      -- n becomes a candidate from a follower
+                followers' = followers - n
+                voteTo' = voteTo + n->n           -- vote for itself                
+            }
+            n in candidates implies {             -- only update the term
+                candidates' = candidates
+                followers' = followers
+                voteTo' = voteTo
+            }
         }
         
         network' = network
@@ -72,6 +79,7 @@ transition[State] timeout {
         step' = sing[add[sum[step], 1]]           
         leaders' = leaders
     }
+
 
 -- Transition 2: followers communicate candidates
 -- randomly select a follower and a candidate
@@ -110,8 +118,10 @@ transition[State] fol_comm_cand{
     step' = sing[add[sum[step], 1]]
     leaders' = leaders
 }
+
+-- Transition 3: candidates communicate leaders
 -- Randomly choosing a candidate and a leader
--- either the leader will vote for the candidate and fall back
+-- either the leader will fall back and then vote for the candidate 
 -- or the candidate will fall back to follower
 transition[State] cand_comm_leader {
     some cand: candidates | some lead: leaders {
@@ -130,22 +140,22 @@ transition[State] cand_comm_leader {
                 candidates' = candidates
                 followers' = followers + lead
                 leaders' = leaders - lead
-                voteTo' = voteTo + lead->cand - lead->lead
+                voteTo' = voteTo + lead->cand -- TODO: is it possible that leader voted before?
                 trm' = trm - lead->trm[lead] + lead->trm[cand]
                
-            } 
-        -- 2. if there's no leader, nothing should happen
+            }         
         reserve' = reserve
         network' = network
         step' = sing[add[sum[step], 1]]
-    } 
+    }
+    -- 2. if there's no leader, nothing should happen
 }
 
-
+-- Transition 4: candidates communicate candidates
 -- Randomly choosing two candidate
 -- one may vote for the other
 transition[State] cand_comm_cand {
-    some cand1: candidates |some cand2: candidates - cand1 {
+    some cand1: candidates | some cand2: candidates - cand1 {
         sum[trm[cand1]] > sum[trm[cand2]] implies {
           -- 1. if cand1 has a higher term, cand2 will fall back to follower and should vote to cand1
           candidates' = candidates - cand2
