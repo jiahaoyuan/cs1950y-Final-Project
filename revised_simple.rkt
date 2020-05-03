@@ -51,26 +51,6 @@ pred stateInvariant[nodeCount: Int] {
                    Majority.constant = sing[2] -- if #network = 3
 }
 
-pred wellFormedEventHealthy {
-    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat
-    all s: election.tran.State | one e: Event | e.pre = s
-}
-
-pred wellFormedEventUnhealthy {
-    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat -- TODO: need to add die and addition
-    all s: election.tran.State | one e: Event | e.pre = s
-}
-
-pred wellFormed {
-    -- wellFormedEvent -- wellFormedEventHealthy and wellFormedEventUnhealthy will be added seperated into run
-    stateInvariant[3]
-    all n: Node | all s: State | {
-        n in s.network implies {
-            one n.(s.trm)
-            lone n.(s.voteTo)
-        }
-    }
-}
 
 ----------------------Section 3. Transitions---------------------------------------
 -- Transition 1: timeout
@@ -305,7 +285,8 @@ transition[State] die {
         network' = network - n
         reserve' = reserve + n
         trm' = trm - n->(n.trm)
-        voteTo' = voteTo
+        some voteTo[n] implies voteTo' = voteTo - n->voteTo[n] else voteTo' = voteTo -- mod
+        --voteTo' = voteTo
         step' = sing[add[sum[step], 1]]
         
         n in followers implies {
@@ -386,6 +367,27 @@ state[State] threeFollowers {
 
 trace<|State, threeFollowers, healthyElectionTransition, _|> election {}
 
+pred wellFormedEventHealthy {
+    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat
+    all s: election.tran.State | one e: Event | e.pre = s
+}
+
+pred wellFormedEventUnhealthy {
+    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat -- TODO: need to add die and addition
+    all s: election.tran.State | one e: Event | e.pre = s
+}
+
+pred wellFormed {
+    -- wellFormedEvent -- wellFormedEventHealthy and wellFormedEventUnhealthy will be added seperated into run
+    stateInvariant[3]
+    all n: Node | all s: State | {
+        n in s.network implies {
+            one n.(s.trm)
+            lone n.(s.voteTo)
+        }
+    }
+}
+
 inst bounds {
     #Node = 3
     #State = 10
@@ -396,12 +398,14 @@ inst bounds {
 -- Finds a leader within the bounds 
 pred atLeastOneLeader {
     wellFormed
+    wellFormedEventHealthy
     some s: State | #s.leaders >= 1
 }
 -- Finds two leaders of different term
 -- TODO: DEBUG
 pred twoLeadersDiffTerm {
     wellFormed
+    wellFormedEventHealthy
     some s: State | {
         #s.leaders = 2 
         some n1: s.leaders | some n2: s.leaders-n1 {
@@ -412,6 +416,7 @@ pred twoLeadersDiffTerm {
 -- Finds two leaders of the same term
 pred twoLeadersSameTerm {
     wellFormed
+    wellFormedEventHealthy
     some s: State | {
         #s.leaders = 2 
         some n1: s.leaders | some n2: s.leaders-n1 {
@@ -420,10 +425,10 @@ pred twoLeadersSameTerm {
     }  
 }
 
-check <|election|> {
-   --not atLeastOneLeader  --sat
-    --not twoLeadersDiffTerm --sat
-   not twoLeadersSameTerm -- unsat
+run <|election|> {
+   atLeastOneLeader  --sat
+   twoLeadersDiffTerm --sat
+   twoLeadersSameTerm -- unsat
 } for bounds
 
 ----------------------------Section 8. Correctness Testing, Unhealthy Network----------------------------------
