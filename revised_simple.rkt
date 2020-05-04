@@ -383,16 +383,13 @@ state[State] threeFollowers {
     followers = network 
 }
 
-/**
+
 trace<|State, threeFollowers, healthyElectionTransition, _|> election {}
 
 pred wellFormedEventHealthy {
     Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat
     all s: election.tran.State | one e: Event | e.pre = s
 }
-
-*/
-
 
 pred wellFormed {
     -- wellFormedEvent -- wellFormedEventHealthy and wellFormedEventUnhealthy will be added seperated into run
@@ -411,15 +408,15 @@ inst bounds {
     #Event = 9
 }
 ----------------------------Section 7. Correctness Testing, Healthy Network----------------------------------
-/**
+
 -- Finds a leader within the bounds 
 pred atLeastOneLeader {
     wellFormed
     wellFormedEventHealthy
     some s: State | #s.leaders >= 1
 }
+
 -- Finds two leaders of different term
--- TODO: DEBUG
 pred twoLeadersDiffTerm {
     wellFormed
     wellFormedEventHealthy
@@ -430,6 +427,7 @@ pred twoLeadersDiffTerm {
         }
     }  
 }
+
 -- Finds two leaders of the same term
 pred twoLeadersSameTerm {
     wellFormed
@@ -441,12 +439,15 @@ pred twoLeadersSameTerm {
         }
     }  
 }
-*/
---run <|election|> {
+
+-- FOR TA: please uncomment out all but one to run each
+
+run <|election|> {
    --atLeastOneLeader  --sat
-   --twoLeadersDiffTerm --sat
+   twoLeadersDiffTerm --sat
    --twoLeadersSameTerm -- unsat
---} for bounds
+} for bounds
+
 
 ----------------------------Section 8. Correctness Testing, Unhealthy Network----------------------------------
 -- Finds a leader within the bounds
@@ -455,8 +456,11 @@ state[State] finalStateWithLeader {
     #leaders > 0
 }
 
---trace<|State, threeFollowers, unhealthyElectionTransition, finalStateWithLeader|> unhealthyElection {}
-trace<|State, threeFollowers, unhealthyElectionTransition, _|> unhealthyElection {}
+-- this trace does not force a final state
+trace<|State, threeFollowers, unhealthyElectionTransition, finalStateWithLeader|> unhealthyElection {}
+
+-- this trace does force a final state
+trace<|State, threeFollowers, unhealthyElectionTransition, _|> unhealthyElectionNoFinal{}
 -----------------------------------------------------------------------------------------------------------------
 -- Checks that at least one leader is elected in the final state, given that there is at least one FailNode event and potentially some AddNode events
 pred wellFormedEventUnhealthy {
@@ -464,6 +468,13 @@ pred wellFormedEventUnhealthy {
     all s: unhealthyElection.tran.State | one e: Event | e.pre = s
     some s: unhealthyElection.tran.State | some e: FailNode | e.pre = s
 }
+
+pred wellFormedEventUnhealthyNoFinal {
+    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat + AddNode + FailNode 
+    all s: unhealthyElectionNoFinal.tran.State | one e: Event | e.pre = s
+    some s: unhealthyElectionNoFinal.tran.State | some e: FailNode | e.pre = s
+}
+
 pred atLeastOneLeaderUnHealthy {
     wellFormed
     wellFormedEventUnhealthy
@@ -476,6 +487,7 @@ pred wellFormedEventUnhealthyNoAddNodeTwoFail {
     all s: unhealthyElection.tran.State | one e: Event | e.pre = s
     some s1: unhealthyElection.tran.State | some s2: unhealthyElection.tran.State-s1 | some e: FailNode | e.post = s1 and e.post = s2
 }
+
 pred majorityFailsNoLeader {
     wellFormed
     wellFormedEventUnhealthyNoAddNodeTwoFail
@@ -487,6 +499,8 @@ pred wellFormedEventUnhealthyNoAddNodeAtLeastOneFailNode {
     all s: unhealthyElection.tran.State | one e: Event | e.pre = s
     some s1: unhealthyElection.tran.State | some e: FailNode | e.post = s1
 }
+
+-- If a minority nodes fail, the election still succeed
 pred oneFailsElectionSucceeds {
     wellFormed
     wellFormedEventUnhealthyNoAddNodeAtLeastOneFailNode
@@ -495,7 +509,7 @@ pred oneFailsElectionSucceeds {
 -- Checks that it is impossible to have two leaders of the same term when we have FailNode events
 pred twoLeadersSameTermUnhealthy {
     wellFormed
-    wellFormedEventUnhealthy
+    wellFormedEventUnhealthyNoFinal
     some s: State | {
         #s.leaders = 2 
         some n1: s.leaders | some n2: s.leaders-n1 {
@@ -504,12 +518,16 @@ pred twoLeadersSameTermUnhealthy {
     }  
 }
 
--- TODO: Two leaders, same term? Diff Term?
-
+-- For TA: when run this, you can comment all out but one to see
+/*
 run <|unhealthyElection|> {
    --atLeastOneLeaderUnHealthy  --sat
    --majorityFailsNoLeader -- unsat,
    --oneFailsElectionSucceeds -- sat
-   twoLeadersSameTermUnhealthy 
 } for bounds
+
+run <|unhealthyElectionNoFinal|> {
+    --twoLeadersSameTermUnhealthy  -- unsat. WARNING: it takes> 5mins. Sorry....
+}
+*/
 
