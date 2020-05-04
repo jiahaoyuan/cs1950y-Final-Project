@@ -357,16 +357,16 @@ transition[State] unhealthyStateTransition[e: Event] {
 transition[State] unhealthyElectionTransition {
     #leaders > 0 implies {
         # candidates <= 0 implies {
-            one e: Timeout+Heartbeat+AddNode+FailNode | healthyStateTransition[this, this', e]
+            one e: Timeout+Heartbeat+AddNode+FailNode | unhealthyStateTransition[this, this', e]
         }else {
-            one e: Event | healthyStateTransition[this, this', e]
+            one e: Event | unhealthyStateTransition[this, this', e]
         }
     } else {
         #candidates > 0 implies {
-            one e: Event-Heartbeat | healthyStateTransition[this, this', e]
+            one e: Event-Heartbeat | unhealthyStateTransition[this, this', e]
         } else {
             -- no leaders or candidates:
-            one e: Timeout+AddNode+FailNode | healthyStateTransition[this, this', e]
+            one e: Timeout+AddNode+FailNode | unhealthyStateTransition[this, this', e]
         }
     }   
 }
@@ -375,6 +375,7 @@ transition[State] unhealthyElectionTransition {
 
 state[State] threeFollowers {
     all n: network | n->sing[0] in trm
+    #network = 3
     no voteTo
     step = sing[0]
     no leaders
@@ -382,19 +383,16 @@ state[State] threeFollowers {
     followers = network 
 }
 
+/**
 trace<|State, threeFollowers, healthyElectionTransition, _|> election {}
-
-trace<|State, threeFollowers, unhealthyElectionTransition, _|> unhealthyElection {}
 
 pred wellFormedEventHealthy {
     Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat
     all s: election.tran.State | one e: Event | e.pre = s
 }
 
-pred wellFormedEventUnhealthy {
-    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat -- TODO: need to add die and addition
-    all s: election.tran.State | one e: Event | e.pre = s
-}
+*/
+
 
 pred wellFormed {
     -- wellFormedEvent -- wellFormedEventHealthy and wellFormedEventUnhealthy will be added seperated into run
@@ -413,7 +411,7 @@ inst bounds {
     #Event = 9
 }
 ----------------------------Section 7. Correctness Testing, Healthy Network----------------------------------
-
+/**
 -- Finds a leader within the bounds 
 pred atLeastOneLeader {
     wellFormed
@@ -443,7 +441,7 @@ pred twoLeadersSameTerm {
         }
     }  
 }
-
+*/
 --run <|election|> {
    --atLeastOneLeader  --sat
    --twoLeadersDiffTerm --sat
@@ -451,15 +449,34 @@ pred twoLeadersSameTerm {
 --} for bounds
 
 ----------------------------Section 8. Correctness Testing, Unhealthy Network----------------------------------
--- Finds a leader within the bounds 
+-- Finds a leader within the bounds
+-- at least once fail node and add node
+state[State] finalStateWithLeader {
+    #leaders > 0
+}
+
+trace<|State, threeFollowers, unhealthyElectionTransition, finalStateWithLeader|> unhealthyElection {}
+
+pred wellFormedEventUnhealthy {
+    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat + AddNode + FailNode -- TODO: need to add die and addition
+    all s: unhealthyElection.tran.State | one e: Event | e.pre = s
+    some s: unhealthyElection.tran.State | some e: FailNode | e.pre = s
+}
+
 pred atLeastOneLeaderUnHealthy {
     wellFormed
-    wellFormedEventHealthy
+    wellFormedEventUnhealthy
+    --some s: State | some e: AddNode | e.pre = s
+    
     some s: State | #s.leaders >= 1
 }
 
+-- TODO: If there are two fail nodes, then no leader elected
+-- TODO: if not majority nodes fail, still succeed in elect leader (without add node back)
+-- TODO: Two leaders, same term? Diff Term?
+
 run <|unhealthyElection|> {
-   atLeastOneLeader  --sat
+   atLeastOneLeaderUnHealthy  --sat
    --twoLeadersDiffTerm --sat
    --twoLeadersSameTerm -- unsat
 } for bounds
