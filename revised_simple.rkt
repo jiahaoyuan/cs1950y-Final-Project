@@ -273,7 +273,7 @@ transition[State] addNode {
         candidates' = candidates
         leaders' = leaders
         
-        trm' = trm + n->sing[0] --TODO: if making it start at trm zero, then we should remove its voteTo in die
+        trm' = trm  --TODO: if making it start at trm zero, then we should remove its voteTo in die
         voteTo' = voteTo
         step' = sing[add[sum[step], 1]]
     }
@@ -284,9 +284,9 @@ transition[State] die {
     some n: network {
         network' = network - n
         reserve' = reserve + n
-        trm' = trm - n->(n.trm)
-        some voteTo[n] implies voteTo' = voteTo - n->voteTo[n] else voteTo' = voteTo -- mod
-        --voteTo' = voteTo
+        trm' = trm
+        --some voteTo[n] implies voteTo' = voteTo - n->voteTo[n] else voteTo' = voteTo
+        voteTo' = voteTo
         step' = sing[add[sum[step], 1]]
         
         n in followers implies {
@@ -455,29 +455,61 @@ state[State] finalStateWithLeader {
     #leaders > 0
 }
 
-trace<|State, threeFollowers, unhealthyElectionTransition, finalStateWithLeader|> unhealthyElection {}
-
+--trace<|State, threeFollowers, unhealthyElectionTransition, finalStateWithLeader|> unhealthyElection {}
+trace<|State, threeFollowers, unhealthyElectionTransition, _|> unhealthyElection {}
+-----------------------------------------------------------------------------------------------------------------
+-- Checks that at least one leader is elected in the final state, given that there is at least one FailNode event and potentially some AddNode events
 pred wellFormedEventUnhealthy {
-    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat + AddNode + FailNode -- TODO: need to add die and addition
+    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat + AddNode + FailNode 
     all s: unhealthyElection.tran.State | one e: Event | e.pre = s
     some s: unhealthyElection.tran.State | some e: FailNode | e.pre = s
 }
-
 pred atLeastOneLeaderUnHealthy {
     wellFormed
     wellFormedEventUnhealthy
-    --some s: State | some e: AddNode | e.pre = s
-    
     some s: State | #s.leaders >= 1
 }
+------------------------------------------------------------------------------------------------------------------
+--Checks that if there are two FailNode events and no AddNode events, there is no leader elected, since cannot reach majority
+pred wellFormedEventUnhealthyNoAddNodeTwoFail {
+    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat + FailNode 
+    all s: unhealthyElection.tran.State | one e: Event | e.pre = s
+    some s1: unhealthyElection.tran.State | some s2: unhealthyElection.tran.State-s1 | some e: FailNode | e.post = s1 and e.post = s2
+}
+pred majorityFailsNoLeader {
+    wellFormed
+    wellFormedEventUnhealthyNoAddNodeTwoFail
+}
+------------------------------------------------------------------------------------------------------------------
+-- Check if there is only one FailNode event and no AddNode events, Raft manages to elect a leader
+pred wellFormedEventUnhealthyNoAddNodeAtLeastOneFailNode {
+    Event = Timeout + Foll_Cand + Cand_Leader + Cand_Cand + CountVotes + Heartbeat + FailNode 
+    all s: unhealthyElection.tran.State | one e: Event | e.pre = s
+    some s1: unhealthyElection.tran.State | some e: FailNode | e.post = s1
+}
+pred oneFailsElectionSucceeds {
+    wellFormed
+    wellFormedEventUnhealthyNoAddNodeAtLeastOneFailNode
+}
+------------------------------------------------------------------------------------------------------------------
+-- Checks that it is impossible to have two leaders of the same term when we have FailNode events
+pred twoLeadersSameTermUnhealthy {
+    wellFormed
+    wellFormedEventUnhealthy
+    some s: State | {
+        #s.leaders = 2 
+        some n1: s.leaders | some n2: s.leaders-n1 {
+            s.trm[n1] = s.trm[n2]
+        }
+    }  
+}
 
--- TODO: If there are two fail nodes, then no leader elected
--- TODO: if not majority nodes fail, still succeed in elect leader (without add node back)
 -- TODO: Two leaders, same term? Diff Term?
 
 run <|unhealthyElection|> {
-   atLeastOneLeaderUnHealthy  --sat
-   --twoLeadersDiffTerm --sat
-   --twoLeadersSameTerm -- unsat
+   --atLeastOneLeaderUnHealthy  --sat
+   --majorityFailsNoLeader -- unsat,
+   --oneFailsElectionSucceeds -- sat
+   twoLeadersSameTermUnhealthy 
 } for bounds
 
