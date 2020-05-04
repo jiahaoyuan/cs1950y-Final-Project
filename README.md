@@ -1,4 +1,4 @@
-# cs1950y-Final-Project
+# -cs1950y-Final-Project
 
 Due to the one-page length limit, we could not present all details above, but if you are interested, you can see the four-page full README below.
 
